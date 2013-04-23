@@ -1,0 +1,561 @@
+from __future__ import with_statement
+
+import logging, tempfile, os, time, shutil
+
+from callbacks import *
+from common import *
+from job import *
+import osspec
+
+
+class PacketState(object):
+    CREATED = "CREATED"                 #created only packet
+    WORKABLE = "WORKABLE"               #working packet without pending jobs
+    PENDING = "PENDING"                 #working packet with pending jobs 
+    SUSPENDED  = "SUSPENDED"            #suspended packet
+    ERROR = "ERROR"                     #unresolved error exists
+    SUCCESSFULL = "SUCCESSFULL"         #successfully done packet
+    HISTORIED = "HISTORIED"             #only for history archives
+    WAITING = "WAITING"                 #wait for executing (until job.continueTime)
+    NONINITIALIZED = "NONINITIALIZED"   #after reset
+    allowed = {
+            CREATED: (WORKABLE, SUSPENDED, NONINITIALIZED),
+            WORKABLE: (SUSPENDED, ERROR, SUCCESSFULL, PENDING, WAITING, NONINITIALIZED),
+            PENDING: (SUSPENDED, WORKABLE, ERROR, WAITING, NONINITIALIZED),
+            SUSPENDED: (WORKABLE, HISTORIED, WAITING, ERROR, NONINITIALIZED),
+            WAITING: (PENDING, SUSPENDED, ERROR, NONINITIALIZED),
+            ERROR: (SUSPENDED, HISTORIED, NONINITIALIZED),
+            SUCCESSFULL: (HISTORIED, NONINITIALIZED),
+            NONINITIALIZED: (CREATED,),
+            HISTORIED: ()}
+
+
+class PacketFlag:
+    USER_SUSPEND = 0x01              #suspended by user
+    RCVR_ERROR   = 0x02              #recovering error detected
+
+
+class PCL_StateChange(object):
+    state_dispatcher = {}
+
+    @classmethod
+    def on_success(cls, pck):
+        pck.SetDoneTags()
+        pck.ReleasePlace()
+    state_dispatcher[PacketState.SUCCESSFULL] = "on_success"
+
+    @classmethod
+    def on_delete(cls, pck):
+        pck.ReleasePlace()
+    state_dispatcher[PacketState.HISTORIED] = "on_delete"
+
+    @classmethod
+    def on_error(cls, pck):
+        if pck.directory and not os.path.isdir(pck.directory):
+            pck.ReleasePlace()
+    state_dispatcher[PacketState.ERROR] = "on_error"
+
+
+class PacketCustomLogic(object):
+    from messages import GetHelperByPacketState, GetEmergencyHelper
+    SchedCtx = None
+    StateMessageHelper = staticmethod(GetHelperByPacketState)
+    EmergencyMessageHelper = staticmethod(GetEmergencyHelper)
+
+    def __init__(self, pck):
+        self.pck = pck
+
+    def DoChangeStateAction(self):
+        action_name = PCL_StateChange.state_dispatcher.get(self.pck.state, None)
+        if action_name:
+            getattr(PCL_StateChange, action_name)(self.pck)
+        msgHelper = self.StateMessageHelper(self.pck, self.SchedCtx)
+        if msgHelper:
+            SendEmail(self.pck.notify_emails, msgHelper)
+
+    def DoEmergencyAction(self):
+        logging.error("incorrect state for \"Get\" operation: %s, packet %s will be markered for delete", self.pck.state, self.pck.name)
+        msgHelper = self.EmergencyMessageHelper(self.pck, self.SchedCtx)
+        if msgHelper:
+            SendEmail(self.pck.notify_emails, msgHelper)
+
+    @classmethod
+    def UpdateContext(cls, context):
+        cls.SchedCtx = context
+
+
+class JobPacketImpl(object):
+    
+    """tags manipulation methods"""
+    def SetWaitingTags(self, wait_tags):
+        for tag in wait_tags:
+            tag.AddCallbackListener(self)
+        self.allTags = set(tag.GetFullname() for tag in wait_tags)
+        self.waitTags = set(tag.GetFullname() for tag in wait_tags if not tag.IsSet())
+
+    def SetDoneTags(self):
+        if self.done_indicator:
+            self.done_indicator.Set()
+
+    def ProcessTagEvent(self, tag):
+        if tag.IsSet():
+            tagname = tag.GetFullname()
+            if tagname in self.waitTags:
+                self.waitTags.remove(tagname)
+            if len(self.waitTags) == 0 and self.state == "SUSPENDED":
+                self.Resume()
+
+    def UpdateTagDependencies(self, tagStorage):
+        self.waitTags = tagset(self.waitTags)
+        for tagname in list(self.waitTags):
+            if tagStorage.CheckTag(tagname):
+                self.ProcessTagEvent(tagStorage.AcquireTag(tagname))
+        if isinstance(self.done_indicator, Tag):
+            self.done_indicator = tagStorage.AcquireTag(self.done_indicator.name)
+        for jid in self.job_done_indicator:
+            if isinstance(self.job_done_indicator[jid], Tag):
+                self.job_done_indicator[jid] = tagStorage.AcquireTag(self.job_done_indicator[jid].name)
+
+    """links manipulation methods"""
+    def ReleaseLinks(self):
+        tmpLinks, self.binLinks = self.binLinks, {}
+        while tmpLinks:
+            binname, file = tmpLinks.popitem()
+            if isinstance(file, BinaryFile):
+                file.Unlink(self, binname)
+                filehash = file.checksum
+            elif isinstance(file, str):
+                filehash = file
+            else:
+                filehash = None
+            if filehash is not None:
+                self.binLinks[binname] = filehash
+
+    def CreateLink(self, binname, file):
+        file.Link(self, binname)
+        self.binLinks[binname] = file
+
+    def AddLink(self, binname, file):
+        if binname in self.binLinks:
+            old_file = self.binLinks.pop(binname)
+            if isinstance(old_file, BinaryFile):
+                old_file.Unlink(self, binname)
+        self.CreateLink(binname, file)
+
+    def CreateLinks(self, context):
+        tmpLinks, self.binLinks = self.binLinks, {}
+        while tmpLinks:
+            binname, file = tmpLinks.popitem()
+            if isinstance(file, str):
+                file = context.Scheduler.binStorage.GetFileByHash(file)
+            if file is not None:
+                self.CreateLink(binname, file)
+
+    """file resource manipulation methods"""
+    def ReleasePlace(self):
+        self.ReleaseLinks()
+        if self.directory and os.path.isdir(self.directory):
+            shutil.rmtree(self.directory, onerror=None)
+        self.directory = None
+        self.streams.clear()
+
+    def CreatePlace(self, context):
+        if getattr(self, "directory", None):
+            raise RuntimeError("can't create duplicate working directory")
+        if getattr(self, "id", None):
+            self.directory = os.path.join(context.packets_directory, self.id)
+            os.makedirs(self.directory)
+        while not getattr(self, "id", None):
+            directory = tempfile.mktemp(dir=context.packets_directory, prefix="pck-")
+            id = os.path.split(directory)[-1]
+            if not (context.Scheduler.GetPacket(id) or os.path.isdir(directory)):
+                try:
+                    os.makedirs(directory)
+                    self.directory = directory
+                    self.id = id
+                except OSError: #os.makedirs failed"
+                    pass
+        osspec.set_common_readable(self.directory)
+        osspec.set_common_executable(self.directory)
+        self.CreateLinks(context)
+        self.streams = dict()
+
+    def ListFiles(self):
+        files = []
+        if self.directory:
+            try:
+                files = os.listdir(self.directory)
+            except:
+                logging.exception("directory %s listing error", self.directory)
+        return files
+
+    def GetFile(self, filename):
+        if not self.directory:
+            raise RuntimeError("working directory doesn't exist")
+        path = os.path.join(self.directory, filename)
+        if not os.path.isfile(path):
+            raise AttributeError("not existing file: %s" % filename)
+        if os.path.dirname(path) != self.directory:
+            raise AttributeError("file %s is outside working directory" % filename)
+        with open(path, "r") as reader:
+            data = reader.read()
+            return data
+
+    """process internal job start/stop"""
+    def ProcessJobStart(self, job):
+        job.input = self.createInput(job.id)
+        job.output = self.createOutput(job.id)
+        isStarted = not self.working
+        self.working.add(job.id)
+        return isStarted
+
+    def ProcessJobDone(self, job):
+        if not hasattr(self, "waitJobs"):
+            self.UpdateJobsDependencies()
+        nState, nTimeout = None, 0
+        self.working.remove(job.id)
+        result = job.Result()
+        if self.state in (PacketState.NONINITIALIZED, PacketState.SUSPENDED):
+            self.leafs.add(job.id)
+        elif result is not None and result.IsSuccessfull():
+            self.done.add(job.id)
+            if self.job_done_indicator.get(job.id):
+                self.job_done_indicator[job.id].Set()
+            for nid in self.edges[job.id]:
+                self.waitJobs[nid].remove(job.id)
+                if not self.waitJobs[nid]:
+                    self.leafs.add(nid)
+            if len(self.done) == len(self.jobs):
+                nState = PacketState.SUCCESSFULL
+            elif self.leafs and self.state != PacketState.WAITING:
+                nState = PacketState.PENDING
+        elif result is None or result.CanRetry():
+            self.leafs.add(job.id)
+            nState = PacketState.WAITING
+            nTimeout = getattr(job, "retry_delay", None) or job.ERR_PENALTY_FACTOR ** job.tries
+            logging.debug("packet %s\twaiting for %s sec", self.name, nTimeout)
+        else:
+            self.result = PackedExecuteResult(len(self.done), len(self.jobs))
+            nState = PacketState.ERROR
+        return nState, nTimeout, not self.working
+
+
+class JobPacket(Unpickable(lock = PickableRLock.create,
+                           jobs = dict,
+                           job_done_indicator = dict,
+                           edges = dict,
+                           binLinks = dict,
+                           done = set,
+                           leafs = set,
+                           working = set,
+                           waitTags = set,
+                           waitingTime = int,
+                           state = (str, PacketState.CREATED),
+                           history = (list, []),
+                           notify_emails = (list, []),
+                           flags = int),
+                CallbackHolder, 
+                ICallbackAcceptor,
+                JobPacketImpl):
+
+    INCORRECT = -1
+
+    def __init__(self, name, priority, context, notify_emails, wait_tags = (), set_tag = None):
+        getattr(super(JobPacket, self), "__init__")()
+        self.name = name
+        self.state = PacketState.NONINITIALIZED
+        self.Init(context)
+        self.priority = priority
+        self.notify_emails = list(notify_emails)
+        self.id = os.path.split(self.directory)[-1]
+        self.history.append((self.state, time.time()))
+        self.SetWaitingTags(wait_tags)
+        self.done_indicator = set_tag 
+
+    def Init(self, context):
+        logging.info("packet init: %r %s", self, self.state)
+        self.result = None
+        if not getattr(self, "directory", None):
+            self.CreatePlace(context)
+        self.waitingTime = 0
+        self.changeState(PacketState.CREATED)
+
+    def __repr__(self):
+        return "<JobPacket(id:%s; name: %s)>" % (getattr(self, "id", None), getattr(self, "name", None))
+
+    def stream_file(self, jid, type):
+        stream = self.streams.get((type, jid), None)
+        if stream is not None:
+            if not stream.closed:
+                stream.close()
+            if stream.name != "<uninitialized file>":
+                return stream.name
+        filename = os.path.join(self.directory, "%s-%s" % (type, jid))
+        if os.path.isfile(filename):
+            return filename
+        return None
+
+    def createInput(self, jid):
+        if jid in self.jobs:
+            filename = self.stream_file(jid, "in")
+            job = self.jobs[jid]
+            if filename is not None:
+                stream = self.streams[("in", jid)] = open(filename, "r")
+            elif len(job.inputs) == 0:
+                stream = self.streams[("in", jid)] = osspec.get_null_input()
+            elif len(job.inputs) == 1:
+                pid, = job.inputs
+                logging.debug("pid: %s, pck_id: %s", pid, self.id)
+                stream = self.streams[("in", jid)] = open(self.stream_file(pid, "out"), "r")
+            else:
+                with open(os.path.join(self.directory, "in-%s" % jid), "w") as writer:
+                    for pid in job.inputs:
+                        with open(self.streams[("out", pid)].name, "r") as reader:
+                            writer.write(reader.read())
+                stream = self.streams[("in", jid)] = open(writer.name, "r")
+            return stream
+        raise RuntimeError("alien job input request")
+ 
+    def createOutput(self, jid):
+        if jid in self.jobs:
+            filename = self.stream_file(jid, "out")
+            if filename is None:
+                filename = os.path.join(self.directory, "out-%s" % jid)
+            stream = self.streams[("out", jid)] = open(filename, "w")
+            return stream
+        raise RuntimeError("alien job output request")
+
+    def canChangeState(self, state):
+        return state in PacketState.allowed[self.state]
+
+    def stopWaiting(self):
+        self.changeState(PacketState.PENDING)
+
+    def changeState(self, state):
+        if state == self.state:
+            return
+        if not self.canChangeState(state):
+            logging.warning("packet %s\tincorrect state change request %r => %r" % (self.name, self.state, state))
+            if state != PacketState.SUCCESSFULL:
+            #temporary hack for fast fix NONPRJ-898 task
+                return False
+        self.state = state
+        logging.debug("packet %s\tnew state %r", self.name, self.state)
+        self.FireEvent("change")
+        self.history.append((self.state, time.time()))
+        PacketCustomLogic(self).DoChangeStateAction()
+        return True
+
+    def OnStart(self, ref):
+        if not hasattr(self, "waitJobs"):
+            self.UpdateJobsDependencies()
+        if isinstance(ref, Job):
+            if self.state not in (PacketState.WORKABLE, PacketState.PENDING) \
+                  or ref.id not in self.jobs \
+                  or self.waitJobs[ref.id] \
+                  or not self.directory:
+                raise RuntimeError("not all conditions are met for starting job %s; packet state: %s; directory: %s" % (ref.id, self.state, self.directory))
+            logging.debug("job %s\tstarted", ref.shell)
+            with self.lock:
+                self.ProcessJobStart(ref)
+
+    def OnDone(self, ref):
+        if isinstance(ref, Job):
+            logging.debug("job %s\tdone [%s]", ref.shell, ref.Result())
+            self.FireEvent("job_done", ref)
+            if ref.id in self.jobs and ref.id in self.working:
+                with self.lock:
+                    nState, nTimeout, isStopped = self.ProcessJobDone(ref)
+                if nState:
+                    if nState == PacketState.WAITING and nTimeout:
+                        self.waitingTime = nTimeout
+                    self.changeState(nState)
+        elif isinstance(ref, Tag):
+            self.ProcessTagEvent(ref)
+
+    def Add(self, shell, parents, pipe_parents, set_tag, tries,
+            max_err_len, retry_delay, pipe_fail, description):
+        if self.state not in (PacketState.CREATED, PacketState.SUSPENDED):
+            raise RuntimeError("incorrect state for \"Add\" operation: %s" % self.state)
+        with self.lock:
+            parents = list(set(p.id for p in parents + pipe_parents))
+            pipe_parents = list(p.id for p in pipe_parents)
+            job = Job(shell, parents, pipe_parents, self, maxTryCount = tries,
+                      limitter = None, max_err_len=max_err_len, retry_delay=retry_delay,
+                      pipe_fail=pipe_fail, description=description)
+            self.jobs[job.id] = job
+            if set_tag:
+                self.job_done_indicator[job.id] = set_tag
+            self.edges[job.id] = []
+            for p in parents:
+                self.edges[p].append(job.id)
+            return job
+
+    def UpdateJobsDependencies(self):
+        def visit(startJID):
+            st = [[startJID, 0]]
+            discovered.add(startJID)
+
+            while st:
+                # num - number of neighbours discovered
+                jid, num = st[-1]
+                adj = self.edges[jid]
+                if num < len(adj):
+                    st[-1][1] += 1
+                    nid = adj[num]
+                    self.waitJobs[nid].add(jid)
+                    if nid not in discovered:
+                        discovered.add(nid)
+                        st.append([nid, 0])
+                    elif nid not in finished:
+                        raise RuntimeError("job dependencies cycle exists")
+                else:
+                    st.pop()
+                    finished.add(jid)
+
+        with self.lock:
+            discovered = set()
+            finished = set()
+            self.waitJobs = dict((jid, set()) for jid in self.jobs if jid not in self.done)
+            for jid in self.jobs:
+                if jid not in discovered and jid not in self.done:
+                    visit(jid)
+            #reset tries count for discovered jobs
+            for jid in discovered:
+                self.jobs[jid].tries = 0
+            self.leafs = set(jid for jid in discovered if not self.waitJobs[jid])
+
+    def Resume(self, resumeWorkable = False):
+        allowed_states = [PacketState.CREATED, PacketState.SUSPENDED]
+        if resumeWorkable:
+            allowed_states.append(PacketState.WORKABLE)
+        if self.state in allowed_states and not self.CheckFlag(PacketFlag.USER_SUSPEND):
+            self.ClearFlag(~0)
+            if len(self.waitTags) != 0:
+                self.changeState(PacketState.SUSPENDED)
+            else:
+                self.UpdateJobsDependencies()
+                self.working = set()
+                self.changeState(PacketState.WORKABLE)
+                if self.leafs:
+                    self.changeState(PacketState.PENDING)
+                elif len(self.done) == len(self.jobs):
+                    self.changeState(PacketState.SUCCESSFULL)
+
+    def Get(self):
+        if self.state not in (PacketState.WORKABLE, PacketState.PENDING):
+            return self.INCORRECT
+        try:
+            self.lock.acquire()
+            for leaf in self.leafs:
+                if self.jobs[leaf].CanStart():
+                    self.FireEvent("job_get", self.jobs[leaf])
+                    self.leafs.remove(leaf)
+                    return self.jobs[leaf]
+        finally:
+            self.lock.release()
+            if not self.leafs:
+                self.changeState(PacketState.WORKABLE)
+
+    def IsDone(self):
+        return self.state in (PacketState.SUCCESSFULL, PacketState.HISTORIED, PacketState.ERROR)
+
+    def History(self):
+        return self.history or []
+
+    def Status(self):
+        history = self.History()
+        total_time = history[-1][1] - history[0][1]
+        wait_time = 0
+        for ((state, start_time), (_, end_time)) in zip(history, history[1:] + [("", time.time())]):
+            if state in ("SUSPENDED", "WAITING",):
+                wait_time += end_time - start_time
+        status = dict(name = self.name,
+                    state = self.state,
+                    wait = list(self.waitTags),
+                    result_tag = self.done_indicator.name if self.done_indicator else None,
+                    priority = self.priority,
+                    history = self.History(),
+                    total_time = total_time,
+                    wait_time = wait_time,
+                    last_modified = self.History()[-1][1],
+                    waiting_time = self.waitingTime if self.state == PacketState.WAITING else None)
+        if self.state in (PacketState.ERROR, PacketState.SUSPENDED, PacketState.WORKABLE, PacketState.PENDING, PacketState.SUCCESSFULL, PacketState.WAITING):
+            status["jobs"] = []
+            for jid, job in self.jobs.iteritems():
+                result = job.Result()
+                results = [safeStringEncode(str(res)) for res in job.results] if result else []
+                state = "done" if jid in self.done \
+                            else "working" if jid in self.working \
+                            else "pending" if jid in self.leafs \
+                            else "errored" if result and not result.IsSuccessfull() \
+                            else "suspended"
+                wait_jobs = map(str, self.waitJobs.get(jid, [])) if self.state == PacketState.WORKABLE else []
+                output_filename = None
+                if getattr(job, 'output', None) and os.path.isfile(job.output.name):
+                    output_filename = os.path.basename(job.output.name)
+                status["jobs"].append(dict(id=str(job.id), shell=job.shell, desc=job.description, state=state, results=results, output_filename=output_filename, wait_jobs=wait_jobs))
+        return status
+            
+    def AddBinary(self, binname, file):
+        self.AddLink(binname, file)
+
+    def CheckFlag(self, flag):
+        return True if (self.flags & flag) else False
+
+    def SetFlag(self, flag):
+        self.flags |= flag
+
+    def ClearFlag(self, flag):
+        self.flags &= ~flag
+
+    def UserSuspend(self, kill_jobs=False):
+        self.SetFlag(PacketFlag.USER_SUSPEND)
+        self.changeState(PacketState.SUSPENDED)
+        if kill_jobs:
+            self.KillJobs()
+
+    def UserResume(self):
+        self.ClearFlag(PacketFlag.USER_SUSPEND)
+        self.Resume()
+
+    def KillJobs(self):
+        for job_id in list(self.working):
+            job = self.jobs[job_id]
+            job.Terminate()
+
+    def Reset(self):
+        self.changeState(PacketState.NONINITIALIZED)
+        allTags = getattr(self, 'allTags', None)
+        if allTags is not None:
+            self.waitTags = allTags.copy()
+        self.KillJobs()
+        if self.done_indicator:
+            self.done_indicator.Unset()
+        for job_id in list(self.done):
+            tag = self.job_done_indicator.get(job_id)
+            if tag:
+                tag.Unset()
+        self.done.clear()
+        for job in self.jobs.values():
+            job.results = []
+
+    def OnReset(self, ref):
+        if self.state == PacketState.SUCCESSFULL and self.done_indicator:
+            self.done_indicator.Reset()
+        for job_id in list(self.done):
+            tag = self.job_done_indicator.get(job_id)
+            if tag:
+                tag.Reset()
+        self.Reset()
+
+    def GetWorkingJobs(self):
+        with self.lock:
+            working_copy = list(self.working)
+        for jid in working_copy:
+            yield self.jobs[jid]
+
+# Hack to restore from old backups (before refcatoring), when JobPacket was in
+# job module.
+import job
+job.JobPacket = JobPacket

@@ -1,0 +1,66 @@
+# vim: filetype=cfg
+[DEFAULT]
+project_dir = /Berkanavt/rem
+
+[store]
+# директория с рабочими директориями пакетов задач
+pck_dir = %(project_dir)s/packets
+# файл для хранения информации о последних изменениях в тэгах
+recent_tags_file = %(project_dir)s/backups/recent_tags.db
+# файл для сохранения информации о "ненужных" тэгах (berkeley-db BTREE формат)
+tags_db_file = %(project_dir)s/backups/tags.db
+# файл для сохранения информации о "удаленых(remote) зависимостях" (berkeley-db BTREE формат)
+remote_tags_db_file = %(project_dir)s/backups/tags-remote.db
+# директория с бэкапами
+backup_dir = %(project_dir)s/backups
+# период между очередными бэкапами (в секундах)
+backup_period = 300
+# число сохраняемых бэкапов
+backup_count = 10
+# директория для бинарных файлов, необходимых для пакетов задач
+binary_dir = %(project_dir)s/bin
+# время хранения бинарных файлов без ссылающихся на них пакетов задач (в секундах)
+binary_lifetime = 86400
+# время хранения информации о пакетах
+error_packet_lifetime = 604800 ; 7 дней
+success_packet_lifetime = 259200 ; 3 дня
+
+
+[log]
+# директория с логами
+dir = %(project_dir)s/log
+# минимальный уровень логирования
+warnlevel = debug
+# имя файла логов
+filename = rem.log
+# число сохраняемых ротационных файлов (ротация выполняется каждую полночь)
+rollcount = 8
+
+[run]
+# максимальное число одновременно выполняемых задач
+poolsize = 100
+# максимальное количество одновременно обрабатываемых запросов на основном порту
+xmlrpc_poolsize = 20
+# максимальное количество одновременно обрабатываемых запросов на порту для неизменяющих запросов
+readonly_xmlrpc_poolsize = 10
+# необязательный параметр - shell скрипт, выполняемый перед запуском
+# REM (нужен для установки необходимых переменных окружения)
+setup_script = %(project_dir)s/setup_env.sh
+
+[server]
+#порт, слушаемый сервером (для общения с клиентами, посылающими задачи)
+port = 8104
+#порт, слушаемый сервером для неизменяющих запросов
+readonly_port = 8103
+#порт для общения между REM-демонами
+system_port = 8105
+#путь до файла с топологией REM-демонов и собственное имя сервера в этой топологии
+network_topology = svn+ssh://arcadia.yandex.ru./arc/trunk/data/robust-executor/configs/searchdata/network_topology.cfg
+#имя хоста в этой топологии - нужно ОБЯЗАТЕЛЬНО ЗАМЕНИТЬ ${hostname} НА РЕАЛЬНОЕ ИМЯ
+network_hostname = ${hostname}
+#посылать ли письма по завершению работы пакетов
+send_emails = yes
+#собирать профилировщиком статистику по использованию памяти (использовать только в отладочных целяx)
+use_memory_profiler = no
+#максимальный интервал между попытками отправки извещений другим REM-ам
+max_remotetags_resend_delay = 300 ; 5 минут
