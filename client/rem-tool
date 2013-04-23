@@ -1,0 +1,154 @@
+#!/usr/bin/env python
+import time, re
+import itertools
+import optparse
+import remclient
+
+def parse_args():
+    parser = optparse.OptionParser("""%prog [options] action
+possible actions:
+    list     - list rem objects (queues (by default), packets (if --queue set) or tags(if --tags set))
+    update   - update packet data (adds binary file) or working limit for queue
+    suspend  - suspend object execution (--queue or --packet have to been set)
+    stop     - stop packet execution (suspend and kill all jobs, --packet have to been set)
+    resume   - resume object execution  (--queue or --packet have to been set)
+    restart  - restart object execution (only for errored packets, --packet have to been set)
+    status   - print object status (--queue, --packet or --tag have to been set)
+    delete   - delete concrete packet""")
+    parser.add_option("-u", "--url", dest="url", default="http://localhost:8104/", help="set REM server url")
+    parser.add_option("-q", "--queue", dest="queue", help="set target queue name")
+    parser.add_option("-p", "--packet", dest="packet", help="set target packet id")
+    parser.add_option("-f", "--file", dest="files", action="append", default=[], help="set file for packet updating")
+    parser.add_option("-t", "--tag", dest="tag", help="set tag name")
+    parser.add_option("--tags", dest="list_tags", action="store_const", const=True, help="list tags, makes sense only with list action")
+    parser.add_option("--alltags", dest="list_all_tags", action="store_const", const=True, help="list tags (including tags not in memory), makes sense only with list action")
+    parser.add_option("-F", "--filter", dest="filter", default="all", help="set targets filter (for listing packets in queue")
+    parser.add_option("-N", "--name", dest="name", help="name regexp for filtering list of tags or packets")
+    parser.add_option("-P", "--prefix", dest="prefix", help="name prefix for filtering list of tags or packets")
+    parser.add_option("-R", "--relloc-path", dest="from_to", default=":", help="relocation PATH for moved packet (':'-splitted pair of queues)", metavar="PATH")
+    parser.add_option("-W", "--working-limit", dest="working_limit", type="int", help="set working limit for queue")
+    opt, args = parser.parse_args()
+    if len(args) != 1:
+        parser.error("")
+    return opt, args
+
+class ICommander(object):
+    def __init__(self, opt, args):
+        self.type = args[0]
+        self.options = opt
+        self.conn = remclient.Connector(self.options.url, conn_retries=2, verbose=True)
+
+def print_pck_info(pck, extended=False):
+    workTime = pck.GetWorkingTime()
+    hd = "packet '%s':" % pck.pck_id
+    print "%s\tname=%s,state=%s;wait=%r,priority=%s;working_time=%s;result_tag=%s" % (hd, pck.name, pck.state, pck.wait, pck.priority, workTime, pck.result_tag)
+    for job in pck.jobs:
+        if job.state == "working": print "%sexec_shell=%s" % (" " * len(hd), job.shell)
+    if extended:
+        for status, tstamp in pck.history:
+            print "\t[%s] %s" % (time.ctime(tstamp), status)
+        for job in pck.jobs:
+            print "[SUBJOB %s] id: %s,\tshell: %s" % (getattr(job, 'desc', ''), getattr(job, 'id', None), job.shell)
+            if not getattr(job, 'wait_jobs', None):
+                print job.state
+            else:
+                print "%s (waiting for jobs: %s)" % (job.state, ', '.join(str(j.id) for j in job.wait_jobs))
+            print "\n".join(i.data.replace("\n", "\n\t") for i in job.results)
+
+
+class CommandExecutionError(Exception): pass
+
+class ListCommander(ICommander):
+    def __call__(self):
+        if self.options.queue:
+            q = self.conn.Queue(self.options.queue)
+            pckList = q.ListPackets(self.options.filter, self.options.name, self.options.prefix)
+            #pckList = remclient.JobPacketInfo.multiupdate(pckList)
+            for pck in pckList:
+                print_pck_info(pck)
+        elif self.options.list_tags:
+            for tag, value in sorted(self.conn.ListObjects("tags", self.options.name, self.options.prefix)):
+                print ("+" if value else "-"), tag
+        elif self.options.list_all_tags:
+            for tag, value in sorted(self.conn.ListObjects("tags", self.options.name, self.options.prefix, False)):
+                print ("+" if value else "-"), tag
+        else:
+            for q, q_stat in self.conn.ListObjects("queues", self.options.name, self.options.prefix):
+                print "queue '%s':\t\t%r" % (q, q_stat)
+
+class TagManipCommander(ICommander):
+    def __call__(self):
+        tagname = self.options.tag
+        tag = self.conn.Tag(tagname)
+        if self.type == "set":
+            tag.Set()
+        elif self.type == "unset":
+            tag.Unset()
+
+class LifeCommander(ICommander):
+    def __call__(self):
+        if self.options.packet:
+            object = self.conn.PacketInfo(self.options.packet)
+        elif self.options.queue:
+            object = self.conn.Queue(self.options.queue)
+        else:
+            raise CommandExecutionError("unknown target for command: %s" % self.type)
+        if self.type == "suspend":  
+            object.Suspend()
+        elif self.type == "stop":
+            if not isinstance(object, remclient.JobPacketInfo):
+                raise CommandExecutionError("only packets may be stopped")
+            object.Stop()
+        elif self.type == "resume":
+            object.Resume()
+        elif self.type == "restart":
+            if not isinstance(object, remclient.JobPacketInfo):
+                raise CommandExecutionError("only packets may be restarted")
+            object.RestartFromErrors()
+        elif self.type == "delete":
+            object.Delete()
+        else:
+            raise CommandExecutionError("unknown command: %s" % self.type)
+
+class StatusCommander(ICommander):
+    def __call__(self):
+        if self.options.queue:
+            q = self.conn.Queue(self.options.queue)
+            print "queue '%s':\t%r" % (self.options.queue, q.Status())
+        if self.options.packet:
+            pck = self.conn.PacketInfo(self.options.packet)
+            print_pck_info(pck, extended=True)
+        if self.options.tag:
+            tag = self.conn.Tag(self.options.tag)
+            print "tag %s value: %s" % (tag.name, tag.Check())
+
+class UpdateCommander(ICommander):
+    def __call__(self):
+        if self.options.packet and self.options.files:
+            pck_id = self.options.packet
+            files = self.options.files
+            pck = self.conn.PacketInfo(pck_id)
+            pck.AddFiles(files)
+        elif self.options.queue and self.options.working_limit:
+            queue = self.conn.Queue(self.options.queue)
+            queue.ChangeWorkingLimit(self.options.working_limit)
+        else:
+            raise CommandExecutionError("not enough parameters for update command")
+
+class MoveCommander(ICommander):
+    def __call__(self):
+        pck_id = self.options.packet
+        src_q, dest_q = self.options.from_to.split(":")
+        if not (pck_id and src_q and dest_q):
+            raise CommandExecutionError("can't move packet %r from \"%s\" to\"%s\"" % (pck_id, src_q, dest_q))
+        pck = self.conn.PacketInfo(pck_id)
+        pck.MoveToQueue(src_q, dest_q)
+
+
+if __name__ == "__main__":
+    opt, args = parse_args()
+    disp_commands = {"list": ListCommander, "suspend": LifeCommander, "resume": LifeCommander, "restart": LifeCommander,
+                     "status": StatusCommander, "update": UpdateCommander, "delete": LifeCommander, "set": TagManipCommander, 
+                     "unset": TagManipCommander, "move": MoveCommander, "stop": LifeCommander}
+    commander = disp_commands[args[0]](opt, args)
+    commander()

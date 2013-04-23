@@ -1,0 +1,195 @@
+from __future__ import with_statement
+
+import itertools
+import copy, time, logging, os, re
+
+from common import *
+from callbacks import *
+from packet import *
+from job import *
+from packet import *
+from storages import *
+from workers import *
+
+class Queue(Unpickable(pending = PackSet.create,
+                       worked = TimedSet.create,
+                       errored = TimedSet.create,
+                       suspended = set,
+                       waited = set,
+                       working = emptyset,
+                       isSuspended = bool,
+                       noninitialized = set,
+                       lock = PickableRLock.create,
+                       errorForgetTm   = int,
+                       successForgetTm = int,
+                       workingLimit = (int, 1)), 
+            CallbackHolder, 
+            ICallbackAcceptor):
+    VIEW_BY_ORDER = "pending", "waited", "errored", "suspended", "worked", "noninitialized"
+    VIEW_BY_STATE = {PacketState.SUSPENDED: "suspended", PacketState.WORKABLE: "suspended",
+        PacketState.PENDING: "pending", PacketState.ERROR: "errored", PacketState.SUCCESSFULL: "worked",
+        PacketState.WAITING: "waited", PacketState.NONINITIALIZED: "noninitialized"}
+    
+    def __init__(self, name):
+        super(Queue, self).__init__()
+        self.name = name
+
+    def __getstate__(self):
+        self.forgetOldItems(self.worked, self.successForgetTm)
+        self.forgetOldItems(self.errored, self.errorForgetTm)
+        sdict = getattr(super(Queue, self), "__getstate__", lambda: self.__dict__)()
+        with self.lock:
+            for q in self.VIEW_BY_ORDER:
+                sdict[q] = sdict[q].copy()
+        return sdict
+
+    def OnJobGet(self, ref):
+        #lock has been already gotten in Queue.Get
+        self.working.add(ref)
+
+    def OnJobDone(self, ref):
+        with self.lock:
+            self.working.discard(ref)
+
+    def OnChange(self, ref):
+        if isinstance(ref, JobPacket):
+            self.relocatePacket(ref)
+            if ref.state == PacketState.WAITING:
+                self.FireEvent("waiting_start", ref)
+
+    def UpdateContext(self, context):
+        self.successForgetTm = context.success_lifetime
+        self.errorForgetTm = context.error_lifetime
+
+    def forgetOldItems(self, queue, expectedLifetime):
+        barrierTm = time.time() - expectedLifetime
+        while len(queue) > 0:
+            job, tm = queue.peak()
+            if tm < barrierTm:
+                job.changeState(PacketState.HISTORIED)
+            else:
+                break
+
+    def relocatePacket(self, pck):
+        dest_queue_name = self.VIEW_BY_STATE.get(pck.state, None)
+        dest_queue = getattr(self, dest_queue_name) if dest_queue_name else None
+        if not (dest_queue and pck in dest_queue):
+            logging.debug("queue %s\tmoving packet %s typed as %s", self.name, pck.name, pck.state)
+            self.movePacket(pck, dest_queue)
+
+    def movePacket(self, pck, dest_queue):
+        src_queue = None
+        for qname in self.VIEW_BY_ORDER:
+            queue = getattr(self, qname, {})
+            if pck in queue:
+                if src_queue is not None:
+                    logging.warning("packet %r is in several queues", pck)
+                src_queue = queue
+        if src_queue != dest_queue:
+            if src_queue is not None:
+                with self.lock: src_queue.remove(pck)
+            if dest_queue is not None:
+                with self.lock: dest_queue.add(pck)
+
+    def IsAlive(self):
+        return not self.isSuspended
+
+    def Add(self, pck):
+        if pck.state not in (PacketState.CREATED, PacketState.SUSPENDED, PacketState.ERROR):
+            raise RuntimeError("can't add \"live\" packet into queue")
+        with self.lock:
+            pck.AddCallbackListener(self)
+            self.working.update(pck.GetWorkingJobs())
+        self.relocatePacket(pck)
+        pck.Resume()
+
+    def Remove(self, pck):
+        if pck.state not in (PacketState.CREATED, PacketState.SUSPENDED, PacketState.ERROR):
+            raise RuntimeError("can't remove \"live\" packet from queue")
+        if pck not in self.ListAllPackets():
+            logging.info("%s", list(self.ListAllPackets()))
+            raise RuntimeError("packet %s is not in queue %s" % (pck.id, self.name))
+        with self.lock:
+            pck.DropCallbackListener(self)
+            self.working.difference_update(pck.GetWorkingJobs())
+        self.movePacket(pck, None)
+
+    def HasStartableJobs(self):
+        return self.pending and len(self.working) < self.workingLimit
+
+    def RestoreNoninitialized(self, pck, context):
+        pck.Init(context)
+        pck.Resume()
+
+    def Get(self, context):
+        DELAY = 5
+        if len(self.noninitialized) != 0:
+            with self.lock:
+                while len(self.noninitialized) != 0:
+                    pck = self.noninitialized.pop()
+                    context.Scheduler.ScheduleTask(0, self.RestoreNoninitialized, pck, context)
+        pckIncorrect = None
+        while True:
+            if not self.HasStartableJobs():
+                return
+            with self.lock:
+                if not self.HasStartableJobs():
+                    return
+                pck, prior = self.pending.peak()
+                pendingJob = pck.Get()
+                if pendingJob == JobPacket.INCORRECT:
+                    #possibly incorrect situation -> will fix if it would be repeated after small delay
+                    if pck == pckIncorrect:
+                        PacketCustomLogic(pck).DoEmergencyAction()
+                        self.pending.pop()
+                        return
+                    else:
+                        pckIncorrect = pck
+                else:
+                    return pendingJob
+            time.sleep(DELAY)
+
+    def ListAllPackets(self):
+        return itertools.chain(*(getattr(self, q) for q in self.VIEW_BY_ORDER))
+
+    def GetWorkingPackets(self):
+        return set(job.packetRef for job in self.working)
+
+    def FilterPackets(self, filter=None):
+        filter = filter or "all"
+        pf, parg = {"errored": (list, self.errored), "suspended": (list, self.suspended), 
+            "pending": (list, self.pending), "worked": (list, self.worked), "working": (Queue.GetWorkingPackets, self),
+            "waiting": (list, self.waited), "all": (Queue.ListAllPackets, self)}[filter]
+        for pck in pf(parg):
+            yield pck
+
+    def ListPackets(self, filter=None, name_regex=None, prefix=None, last_modified=None):
+        packets = []
+        for pck in self.FilterPackets(filter):
+            if name_regex and not name_regex.match(pck.name):
+                continue
+            if prefix and not pck.name.startswith(prefix):
+                continue
+            if last_modified and (not pck.History() or pck.History()[-1][1] < last_modified):
+                continue
+            packets.append(pck)
+        return packets
+
+    def Resume(self, resumeWorkable = False):
+        self.isSuspended = False
+        for pck in list(self.suspended):
+            pck.Resume(resumeWorkable)
+
+    def Suspend(self):
+        self.isSuspended = True
+
+    def Status(self):
+        return {"alive": self.IsAlive(), "pending": len(self.pending), "suspended": len(self.suspended), 
+            "errored": len(self.errored), "worked": len(self.worked),
+            "waiting": len(self.waited), "working": len(self.working), "working-limit": self.workingLimit}
+
+    def ChangeWorkingLimit(self, lmtValue):
+        self.workingLimit = int(lmtValue)
+
+    def Empty(self):
+        return not any(getattr(self, subq_name, None) for subq_name in self.VIEW_BY_ORDER)
