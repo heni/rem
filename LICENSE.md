@@ -1,9 +1,9 @@
 This software is distributed under MIT license
 
 Copyrights:
-    © Yandex (http://company.yandex.com), 2013
-    © Yuliy Ayavazyan, 2013
-    © Eugene Krokhalev, 2013
+    © Yandex (http://company.yandex.com), 2013  
+    © Yuliy Ayavazyan, 2013  
+    © Eugene Krokhalev, 2013  
     © Artem Volkhin, 2013
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
