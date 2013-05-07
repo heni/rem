@@ -50,22 +50,11 @@ class ClientInfo(object):
 
 class Configuration(object):
     @classmethod
-    def GetBubenConfig(cls):
-        config = cls()
-        config.server1 = ClientInfo("buben-4", "svn+ssh://arcadia.yandex.ru/arc/trunk/data/robust-executor/configs/searchdata/bubenj4", "bubenj4")
-        config.server2 = ClientInfo("buben-5", "svn+ssh://arcadia.yandex.ru/arc/trunk/data/robust-executor/configs/searchdata/bubenj5", "bubenj5")
-        config.notify_email = "ekrokhalev@yandex-team.ru"
-        return config
-
-    @classmethod
     def GetLocalConfig(cls):
         config = cls()
         config.server1 = ClientInfo("local-01", "local://.", "localhost")
         config.server2 = ClientInfo("local-02", "local://../rem2/", "localhost")
-        config.notify_email = "ekrokhalev@yandex-team.ru"
-        #config.server1 = ClientInfo("local-01", "/home/yuliy/rem1", "localhost")
-        #config.server2 = ClientInfo("local-02", "/home/yuliy/rem2", "localhost")
-        #config.notify_email = "yuliy@yandex-team.ru"
+        config.notify_email = "eugene.krokhalev@gmail.com"
         return config
 
     @staticmethod
@@ -95,7 +84,6 @@ class Configuration(object):
 
 
 if __name__ == "__main__":
-    # config = Configuration.GetBubenConfig()
     config = Configuration.GetLocalConfig()
     testdir.setUp(config, "userdata")
     unittest.TestProgram(module=testdir)
