@@ -96,8 +96,9 @@ class TagLogger(Unpickable(lock = PickableRLock.create), ICallbackAcceptor):
         logging.info("TagLogger.Rotate")
         with self.lock:
             self.file.close()
-            new_filename = "%s-%d" % (self.db_file, time.time())
-            os.rename(self.db_file, new_filename)
+            if os.path.exists(self.db_file):
+                new_filename = "%s-%d" % (self.db_file, time.time())
+                os.rename(self.db_file, new_filename)
             self.Open(self.db_file)
 
     def Clear(self, final_time):
