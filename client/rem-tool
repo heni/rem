@@ -4,6 +4,7 @@ import itertools
 import optparse
 import remclient
 
+
 def parse_args():
     parser = optparse.OptionParser("""%prog [options] action
 possible actions:
@@ -20,17 +21,22 @@ possible actions:
     parser.add_option("-p", "--packet", dest="packet", help="set target packet id")
     parser.add_option("-f", "--file", dest="files", action="append", default=[], help="set file for packet updating")
     parser.add_option("-t", "--tag", dest="tag", help="set tag name")
-    parser.add_option("--tags", dest="list_tags", action="store_const", const=True, help="list tags, makes sense only with list action")
-    parser.add_option("--alltags", dest="list_all_tags", action="store_const", const=True, help="list tags (including tags not in memory), makes sense only with list action")
-    parser.add_option("-F", "--filter", dest="filter", default="all", help="set targets filter (for listing packets in queue")
+    parser.add_option("--tags", dest="list_tags", action="store_const", const=True,
+                      help="list tags, makes sense only with list action")
+    parser.add_option("--alltags", dest="list_all_tags", action="store_const", const=True,
+                      help="list tags (including tags not in memory), makes sense only with list action")
+    parser.add_option("-F", "--filter", dest="filter", default="all",
+                      help="set targets filter (for listing packets in queue")
     parser.add_option("-N", "--name", dest="name", help="name regexp for filtering list of tags or packets")
     parser.add_option("-P", "--prefix", dest="prefix", help="name prefix for filtering list of tags or packets")
-    parser.add_option("-R", "--relloc-path", dest="from_to", default=":", help="relocation PATH for moved packet (':'-splitted pair of queues)", metavar="PATH")
+    parser.add_option("-R", "--relloc-path", dest="from_to", default=":",
+                      help="relocation PATH for moved packet (':'-splitted pair of queues)", metavar="PATH")
     parser.add_option("-W", "--working-limit", dest="working_limit", type="int", help="set working limit for queue")
     opt, args = parser.parse_args()
     if len(args) != 1:
         parser.error("")
     return opt, args
+
 
 class ICommander(object):
     def __init__(self, opt, args):
@@ -38,10 +44,12 @@ class ICommander(object):
         self.options = opt
         self.conn = remclient.Connector(self.options.url, conn_retries=2, verbose=True)
 
+
 def print_pck_info(pck, extended=False):
     workTime = pck.GetWorkingTime()
     hd = "packet '%s':" % pck.pck_id
-    print "%s\tname=%s,state=%s;wait=%r,priority=%s;working_time=%s;result_tag=%s" % (hd, pck.name, pck.state, pck.wait, pck.priority, workTime, pck.result_tag)
+    print "%s\tname=%s,state=%s;wait=%r,priority=%s;working_time=%s;result_tag=%s" % (
+        hd, pck.name, pck.state, pck.wait, pck.priority, workTime, pck.result_tag)
     for job in pck.jobs:
         if job.state == "working": print "%sexec_shell=%s" % (" " * len(hd), job.shell)
     if extended:
@@ -57,6 +65,7 @@ def print_pck_info(pck, extended=False):
 
 
 class CommandExecutionError(Exception): pass
+
 
 class ListCommander(ICommander):
     def __call__(self):
@@ -76,6 +85,7 @@ class ListCommander(ICommander):
             for q, q_stat in self.conn.ListObjects("queues", self.options.name, self.options.prefix):
                 print "queue '%s':\t\t%r" % (q, q_stat)
 
+
 class TagManipCommander(ICommander):
     def __call__(self):
         tagname = self.options.tag
@@ -85,15 +95,17 @@ class TagManipCommander(ICommander):
         elif self.type == "unset":
             tag.Unset()
 
+
 class LifeCommander(ICommander):
     def __call__(self):
         if self.options.packet:
             object = self.conn.PacketInfo(self.options.packet)
+
         elif self.options.queue:
             object = self.conn.Queue(self.options.queue)
         else:
             raise CommandExecutionError("unknown target for command: %s" % self.type)
-        if self.type == "suspend":  
+        if self.type == "suspend":
             object.Suspend()
         elif self.type == "stop":
             if not isinstance(object, remclient.JobPacketInfo):
@@ -104,11 +116,15 @@ class LifeCommander(ICommander):
         elif self.type == "restart":
             if not isinstance(object, remclient.JobPacketInfo):
                 raise CommandExecutionError("only packets may be restarted")
-            object.RestartFromErrors()
+            if object.state == 'SUCCESSFULL':
+                object.Restart()
+            else:
+                object.RestartFromErrors()
         elif self.type == "delete":
             object.Delete()
         else:
             raise CommandExecutionError("unknown command: %s" % self.type)
+
 
 class StatusCommander(ICommander):
     def __call__(self):
@@ -121,6 +137,7 @@ class StatusCommander(ICommander):
         if self.options.tag:
             tag = self.conn.Tag(self.options.tag)
             print "tag %s value: %s" % (tag.name, tag.Check())
+
 
 class UpdateCommander(ICommander):
     def __call__(self):
@@ -135,6 +152,7 @@ class UpdateCommander(ICommander):
         else:
             raise CommandExecutionError("not enough parameters for update command")
 
+
 class MoveCommander(ICommander):
     def __call__(self):
         pck_id = self.options.packet
@@ -148,7 +166,8 @@ class MoveCommander(ICommander):
 if __name__ == "__main__":
     opt, args = parse_args()
     disp_commands = {"list": ListCommander, "suspend": LifeCommander, "resume": LifeCommander, "restart": LifeCommander,
-                     "status": StatusCommander, "update": UpdateCommander, "delete": LifeCommander, "set": TagManipCommander, 
+                     "status": StatusCommander, "update": UpdateCommander, "delete": LifeCommander,
+                     "set": TagManipCommander,
                      "unset": TagManipCommander, "move": MoveCommander, "stop": LifeCommander}
     commander = disp_commands[args[0]](opt, args)
     commander()
