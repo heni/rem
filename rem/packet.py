@@ -237,6 +237,7 @@ class JobPacketImpl(object):
         else:
             self.result = PackedExecuteResult(len(self.done), len(self.jobs))
             nState = PacketState.ERROR
+
         return nState, nTimeout, not self.working
 
 
@@ -260,7 +261,7 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
 
     INCORRECT = -1
 
-    def __init__(self, name, priority, context, notify_emails, wait_tags = (), set_tag = None):
+    def __init__(self, name, priority, context, notify_emails, wait_tags = (), set_tag = None, integrity = True):
         getattr(super(JobPacket, self), "__init__")()
         self.name = name
         self.state = PacketState.NONINITIALIZED
@@ -270,7 +271,8 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
         self.id = os.path.split(self.directory)[-1]
         self.history.append((self.state, time.time()))
         self.SetWaitingTags(wait_tags)
-        self.done_indicator = set_tag 
+        self.done_indicator = set_tag
+        self.integrity = True
 
     def Init(self, context):
         logging.info("packet init: %r %s", self, self.state)
@@ -520,7 +522,9 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
         self.Resume()
 
     def KillJobs(self):
-        for job_id in list(self.working):
+        with self.lock:
+            working_copy = list(self.working)
+        for job_id in working_copy:
             job = self.jobs[job_id]
             job.Terminate()
 

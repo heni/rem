@@ -2,6 +2,7 @@ from __future__ import with_statement
 import subprocess, logging, sys, tempfile, os, time, shutil
 import threading
 
+
 from callbacks import *
 from common import *
 import osspec
@@ -115,6 +116,8 @@ class Job(Unpickable(err=nullobject,
         self.pids = pids
         try:
             self.tries += 1
+            if self.tries > self.maxTryCount:
+                raise Exception("Job id={} with shell `{}` :max try count".format(self.id, self.shell))
             self.FireEvent("start")
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
@@ -133,8 +136,12 @@ class Job(Unpickable(err=nullobject,
             if result.IsFailed() and self.tries >= self.maxTryCount and \
                     self.packetRef.state == packet.PacketState.WORKABLE:
                 self.results.append(TriesExceededResult(self.tries))
-        except:
-            logging.exception("")
+        except Exception, e:
+            logging.exception("Run job {} exception: ".format(self.id) + e.message)
+            #TODO: check for thread-safety
+            if self.packetRef.integrity:
+                self.packetRef.UserSuspend(kill_jobs=True)
+                self.packetRef.changeState(packet.PacketState.ERROR)
         finally:
             self.CloseStreams()
             self.FireEvent("done")

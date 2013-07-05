@@ -15,6 +15,7 @@
     #создаётся пакет с именем packet-name, приориететом выполнения PACK_PRIOR, 
     #  начало выполнения пакета должно быть отложено до момента, когда будут установлены все тэги "tag1", "tag2" и "tag3"
     #  и в случае успешного выполнения пакета следует установить тэг "tag4"
+    # integrity - при неудачном завершении задания остальные задания прекращают работу, статус пакета устанавливается в ERROR
     pack = conn.Packet("packet-name", PACK_PRIOR, wait_tags = ["tag1", "tag2", "tag3"], set_tag = "tag4")
     #добавление задач в пакет
     #параметры метода AddJob:
@@ -173,16 +174,18 @@ class JobPacket(object):
     """прокси объект для создания пакетов задач REM"""
     DEFAULT_TRIES_COUNT = 5
     
-    def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False):
+    def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False, integrity=True):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
             raise RuntimeError("result tag %s already set for packet %s" % (set_tag, name))
-        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag)
+        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, integrity)
 
-    def AddJob(self, shell, parents = [], pipe_parents = [], set_tag = None, tries = DEFAULT_TRIES_COUNT, files = None, \
+
+    def AddJob(self, shell, parents = [], pipe_parents = [], set_tag = None, tries = DEFAULT_TRIES_COUNT, files = None,
                max_err_len=None, retry_delay=None, pipe_fail=False, description=""):
-        """добавляет задачу в пакет 
+        """
+        добавляет задачу в пакет
         shell - коммандная строка, которую следует выполнить
         tries - количество попыток выполнения команды (в случае неуспеха команда перазапускается ограниченное число раз) (по умолчанию: 5)
         parents - задания, которые должны быть выполнены до начала создаваемого
@@ -514,12 +517,13 @@ class Connector(object):
         """возвращает объект для работы с очередью c именем qname (см. класс Queue)"""
         return Queue(self, qname)
 
-    def Packet(self, pckname, priority = MAX_PRIORITY, notify_emails = [], wait_tags = (), set_tag = None, check_tag_uniqueness=False):
+    def Packet(self, pckname, priority = MAX_PRIORITY, notify_emails = [], wait_tags = (), set_tag = None, check_tag_uniqueness=False, integrity=True):
         """создает новый пакет с именем pckname
             priority - приоритет выполнения пакета
             notify_emails - список почтовых адресов, для уведомления об ошибках
             wait_tags - список тэгов, установка которых является необходимым условием для начала выполнения пакета
             set_tag - тэг, устанавливаемый по завершении работы пакеты
+            integrity - при неудачном завершении задания остальные задания прекращают работу, статус пакета устанавливается в ERROR
         возвращает объект класса JobPacket"""
         return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness)
 
