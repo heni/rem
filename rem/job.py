@@ -137,9 +137,9 @@ class Job(Unpickable(err=nullobject,
                     self.packetRef.state == packet.PacketState.WORKABLE:
                 self.results.append(TriesExceededResult(self.tries))
         except Exception, e:
-            logging.exception("Run job {} exception: ".format(self.id) + e.message)
+            logging.exception("Run job %s exception: %s", self.id, e.message)
             #TODO: check for thread-safety
-            if self.packetRef.integrity:
+            if self.packetRef.kill_all_jobs_on_error:
                 self.packetRef.UserSuspend(kill_jobs=True)
                 self.packetRef.changeState(packet.PacketState.ERROR)
         finally:

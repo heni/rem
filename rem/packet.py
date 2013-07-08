@@ -261,7 +261,7 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
 
     INCORRECT = -1
 
-    def __init__(self, name, priority, context, notify_emails, wait_tags = (), set_tag = None, integrity = True):
+    def __init__(self, name, priority, context, notify_emails, wait_tags = (), set_tag = None, kill_all_jobs_on_error = True):
         getattr(super(JobPacket, self), "__init__")()
         self.name = name
         self.state = PacketState.NONINITIALIZED
@@ -272,7 +272,7 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
         self.history.append((self.state, time.time()))
         self.SetWaitingTags(wait_tags)
         self.done_indicator = set_tag
-        self.integrity = True
+        self.kill_all_jobs_on_error = kill_all_jobs_on_error
 
     def Init(self, context):
         logging.info("packet init: %r %s", self, self.state)
