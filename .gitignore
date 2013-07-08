@@ -1,0 +1,8 @@
+*.py[cod]
+.idea
+*.cfg
+*.dump
+*.db
+log/*
+var/*
+*.log*
