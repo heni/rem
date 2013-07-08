@@ -182,7 +182,7 @@ class JobPacket(object):
         self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error)
 
 
-    def AddJob(self, shell, parents = [], pipe_parents = [], set_tag = None, tries = DEFAULT_TRIES_COUNT, files = None,
+    def AddJob(self, shell, parents = [], pipe_parents = [], set_tag = None, tries = DEFAULT_TRIES_COUNT, files = None, \
                max_err_len=None, retry_delay=None, pipe_fail=False, description=""):
         """добавляет задачу в пакет
         shell - коммандная строка, которую следует выполнить

@@ -237,7 +237,6 @@ class JobPacketImpl(object):
         else:
             self.result = PackedExecuteResult(len(self.done), len(self.jobs))
             nState = PacketState.ERROR
-
         return nState, nTimeout, not self.working
 
 
