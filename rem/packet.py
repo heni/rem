@@ -260,7 +260,7 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
 
     INCORRECT = -1
 
-    def __init__(self, name, priority, context, notify_emails, wait_tags = (), set_tag = None):
+    def __init__(self, name, priority, context, notify_emails, wait_tags = (), set_tag = None, kill_all_jobs_on_error = True):
         getattr(super(JobPacket, self), "__init__")()
         self.name = name
         self.state = PacketState.NONINITIALIZED
@@ -270,7 +270,8 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
         self.id = os.path.split(self.directory)[-1]
         self.history.append((self.state, time.time()))
         self.SetWaitingTags(wait_tags)
-        self.done_indicator = set_tag 
+        self.done_indicator = set_tag
+        self.kill_all_jobs_on_error = kill_all_jobs_on_error
 
     def Init(self, context):
         logging.info("packet init: %r %s", self, self.state)
@@ -519,9 +520,14 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
         self.ClearFlag(PacketFlag.USER_SUSPEND)
         self.Resume()
 
+    def GetWorkingJobs(self):
+        with self.lock:
+            working_copy = list(self.working)
+        for jid in working_copy:
+            yield self.jobs[jid]
+
     def KillJobs(self):
-        for job_id in list(self.working):
-            job = self.jobs[job_id]
+        for job in self.GetWorkingJobs():
             job.Terminate()
 
     def Reset(self):
@@ -549,11 +555,6 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
                 tag.Reset()
         self.Reset()
 
-    def GetWorkingJobs(self):
-        with self.lock:
-            working_copy = list(self.working)
-        for jid in working_copy:
-            yield self.jobs[jid]
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in
 # job module.
