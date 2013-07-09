@@ -1,0 +1,13 @@
+*.py[cod]
+*.cfg
+*.dump
+*.db
+*.log*
+*.tmp
+*.db*
+log
+.idea/*
+var
+setup_env.sh
+packets
+bin
