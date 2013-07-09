@@ -11,3 +11,4 @@ var
 setup_env.sh
 packets
 bin
+run-tests-local.py
