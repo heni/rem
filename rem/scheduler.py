@@ -16,11 +16,11 @@ from connmanager import *
 import osspec
 
 
-class SchedWatcher(Unpickable(tasks = TimedSet.create,
-                              lock  = PickableLock.create,
-                              workingQueue = list),
-                  ICallbackAcceptor):
-
+class SchedWatcher(Unpickable(tasks=TimedSet.create,
+                              lock=PickableLock.create,
+                              workingQueue=list
+                            ),
+                   ICallbackAcceptor):
     def OnTick(self, ref):
         tm = time.time()
         while len(self.tasks) > 0:
@@ -58,17 +58,20 @@ class SchedWatcher(Unpickable(tasks = TimedSet.create,
         return getattr(super(SchedWatcher, self), "__getstate__", lambda: sdict)()
 
 
-class Scheduler(Unpickable(lock     = PickableLock.create,
-                           qList    = deque, #list of all known queue
-                           qRef     = dict,  #inversed qList for searching queues by name
-                           tagRef   = TagStorage,  #inversed taglist for searhing tags by name
-                           alive    = (bool, False),
-                           binStorage = BinaryStorage.create, #storage with knowledge about saved binary objects (files for packets)
-                           packStorage = GlobalPacketStorage, #storage of all known packets
-                           tempStorage = ShortStorage, #storage with knowledge about nonassigned packets (packets that was created but not yet assigned to appropriate queue)
-                           schedWatcher = SchedWatcher, #watcher for time scheduled events
-                           connManager = ConnectionManager, #connections to others rems
-                ), ICallbackAcceptor):
+class Scheduler(Unpickable(lock=PickableLock.create,
+                           qList=deque, #list of all known queue
+                           qRef=dict, #inversed qList for searching queues by name
+                           tagRef=TagStorage, #inversed taglist for searhing tags by name
+                           alive=(bool, False),
+                           binStorage=BinaryStorage.create,
+                           #storage with knowledge about saved binary objects (files for packets)
+                           packStorage=GlobalPacketStorage, #storage of all known packets
+                           tempStorage=ShortStorage,
+                           #storage with knowledge about nonassigned packets (packets that was created but not yet assigned to appropriate queue)
+                           schedWatcher=SchedWatcher, #watcher for time scheduled events
+                           connManager=ConnectionManager, #connections to others rems
+                        ),
+                ICallbackAcceptor):
     BackupFilenameMatchRe = re.compile("sched-\d*.dump$")
     UnsuccessfulBackupFilenameMatchRe = re.compile("sched-\d*.dump.tmp$")
 
@@ -101,6 +104,7 @@ class Scheduler(Unpickable(lock     = PickableLock.create,
 
     def initProfiler(self):
         import guppy
+
         self.HpyInstance = guppy.hpy()
         self.LastHeap = None
 
@@ -191,6 +195,7 @@ class Scheduler(Unpickable(lock     = PickableLock.create,
 
     def Deserialize(self, stream):
         import common
+
         with self.lock:
             common.ObjectRegistrator_ = ObjectRegistrator_ = self.ObjectRegistratorClass()
             unpickler = Unpickler(stream)
@@ -231,7 +236,9 @@ class Scheduler(Unpickable(lock     = PickableLock.create,
                 if dstStorage is None:
                     #do not print about already errored packets
                     if not pck.CheckFlag(PacketFlag.RCVR_ERROR):
-                        logging.warning("can't restore packet directory: %s for packet %s. Packet marked as error from old state %s", pck.directory, pck.name, pck.state)
+                        logging.warning(
+                            "can't restore packet directory: %s for packet %s. Packet marked as error from old state %s",
+                            pck.directory, pck.name, pck.state)
                         pck.SetFlag(PacketFlag.RCVR_ERROR)
                         pck.changeState(PacketState.ERROR)
                     dstStorage = self.packStorage

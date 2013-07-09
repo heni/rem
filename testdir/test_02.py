@@ -11,6 +11,7 @@ import xmlrpclib
 import remclient
 from testdir import *
 
+
 class T02(unittest.TestCase):
     """Checking common server functionality"""
 
@@ -22,7 +23,7 @@ class T02(unittest.TestCase):
     def testSimplePacket(self):
         pckname = "simpletest-%d" % self.timestamp
         pck = self.connector.Packet(pckname, self.timestamp)
-        pck.AddJob("sleep 1", tries=2);
+        pck.AddJob("sleep 1", tries=2)
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         logging.info("packet %s(%s) added to queue %s, waiting until doing", pckname, pck.id, TestingQueue.Get())
         pckInfo = self.connector.PacketInfo(pck.id)
@@ -34,8 +35,10 @@ class T02(unittest.TestCase):
         pck = self.connector.Packet(pckname, self.timestamp)
         f0 = tempfile.NamedTemporaryFile(dir=".", suffix="module.py")
         f1 = tempfile.NamedTemporaryFile(dir=".", suffix="s.py")
-        print >>f0, "X = 'OK'"; f0.flush();
-        print >>f1, "#!/usr/bin/env python\nimport module\nprint module.X"; f1.flush();
+        print >> f0, "X = 'OK'"
+        f0.flush()
+        print >> f1, "#!/usr/bin/env python\nimport module\nprint module.X";
+        f1.flush()
         j0 = pck.AddJob("PYTHONPATH=. ./s.py", files={"module.py": f0.name, "s.py": f1.name}, tries=1)
         j1 = pck.AddJob("grep OK", pipe_parents=[j0], tries=1)
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
@@ -82,10 +85,12 @@ class T02(unittest.TestCase):
             pckname = "bulkpck-%d-%d" % (index, self.timestamp)
             tagList += ["tg-%d-psx-%d" % (index, self.timestamp), "tg-%d-echo-%d" % (index, self.timestamp)]
             pck = self.connector.Packet(pckname, self.timestamp, notify_emails=[self.notifyEmail])
-            pck.AddJobsBulk({"shell": "ps x", "set_tag": tagList[-2]}, {"shell": "echo xxx", "set_tag": tagList[-1]}, {"shell": "sleep 1"})
+            pck.AddJobsBulk({"shell": "ps x", "set_tag": tagList[-2]}, {"shell": "echo xxx", "set_tag": tagList[-1]},
+                            {"shell": "sleep 1"})
             queue.AddPacket(pck)
             pckList.append(self.connector.PacketInfo(pck.id))
-        logging.info("packets with prefix bulkpck(%s) added to queue %s, waiting until doing", [pi.pck_id for pi in pckList], TestingQueue.Get())
+        logging.info("packets with prefix bulkpck(%s) added to queue %s, waiting until doing",
+                     [pi.pck_id for pi in pckList], TestingQueue.Get())
         PrintCurrentWorkingJobs(queue)
         WaitForExecutionList(pckList)
         for tagname in tagList:
@@ -121,13 +126,13 @@ class T02(unittest.TestCase):
         pckname = "hugeout-%d" % self.timestamp
         pck = self.connector.Packet(pckname, self.timestamp, notify_emails=[self.notifyEmail])
         with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >>script_printer, "#!/usr/bin/env python"
-            print >>script_printer, "import sys"
-            print >>script_printer, "for i in xrange(1000000): print 'Hello, World!'"
-            print >>script_printer, "for i in xrange(1000000): print >>sys.stderr, 'Hello, World!'"
+            print >> script_printer, "#!/usr/bin/env python"
+            print >> script_printer, "import sys"
+            print >> script_printer, "for i in xrange(1000000): print 'Hello, World!'"
+            print >> script_printer, "for i in xrange(1000000): print >>sys.stderr, 'Hello, World!'"
             script_printer.flush()
             j1 = pck.AddJob("./huge.py", tries=2, files={"huge.py": script_printer.name})
-        j2 = pck.AddJob("wc -l",  pipe_parents=[j1], tries=2)
+        j2 = pck.AddJob("wc -l", pipe_parents=[j1], tries=2)
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         logging.info("packet %s(%s) added to queue %s, waiting until doing", pckname, pck.id, TestingQueue.Get())
         pckInfo = self.connector.PacketInfo(pck)
@@ -139,6 +144,7 @@ class T02(unittest.TestCase):
             lst = list(lst)
             logging.info(lst)
             return any(val in el for el in lst)
+
         pckname = "suspend-kill-%.f" % time.time()
         pck = self.connector.Packet(pckname, time.time())
         pck.AddJob("sleep 10 && echo 12344321")
@@ -229,6 +235,7 @@ class T02(unittest.TestCase):
 
     def testAsyncQueries(self):
         NUM_TAGS = 1001
+
         def queryFunction(connector):
             tags = connector.ListObjects("tags", prefix="async-query-tag-", memory_only=False)
             self.assertEqual(NUM_TAGS, len(tags))
@@ -248,7 +255,8 @@ class T02(unittest.TestCase):
         pck = self.connector.Packet(pckname, self.timestamp, set_tag=tagname, check_tag_uniqueness=True)
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         time.sleep(1.0)
-        self.assertRaises(RuntimeError, self.connector.Packet, pckname2, self.timestamp, set_tag=tagname, check_tag_uniqueness=True)
+        self.assertRaises(RuntimeError, self.connector.Packet, pckname2, self.timestamp, set_tag=tagname,
+                          check_tag_uniqueness=True)
 
     def testQueueDoesntExist(self):
         """Tests that read operations on non-existent queue fail"""

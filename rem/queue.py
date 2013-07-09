@@ -11,25 +11,26 @@ from packet import *
 from storages import *
 from workers import *
 
-class Queue(Unpickable(pending = PackSet.create,
-                       worked = TimedSet.create,
-                       errored = TimedSet.create,
-                       suspended = set,
-                       waited = set,
-                       working = emptyset,
-                       isSuspended = bool,
-                       noninitialized = set,
-                       lock = PickableRLock.create,
-                       errorForgetTm   = int,
-                       successForgetTm = int,
-                       workingLimit = (int, 1)), 
-            CallbackHolder, 
+
+class Queue(Unpickable(pending=PackSet.create,
+                       worked=TimedSet.create,
+                       errored=TimedSet.create,
+                       suspended=set,
+                       waited=set,
+                       working=emptyset,
+                       isSuspended=bool,
+                       noninitialized=set,
+                       lock=PickableRLock.create,
+                       errorForgetTm=int,
+                       successForgetTm=int,
+                       workingLimit=(int, 1)),
+            CallbackHolder,
             ICallbackAcceptor):
     VIEW_BY_ORDER = "pending", "waited", "errored", "suspended", "worked", "noninitialized"
     VIEW_BY_STATE = {PacketState.SUSPENDED: "suspended", PacketState.WORKABLE: "suspended",
-        PacketState.PENDING: "pending", PacketState.ERROR: "errored", PacketState.SUCCESSFULL: "worked",
-        PacketState.WAITING: "waited", PacketState.NONINITIALIZED: "noninitialized"}
-    
+                     PacketState.PENDING: "pending", PacketState.ERROR: "errored", PacketState.SUCCESSFULL: "worked",
+                     PacketState.WAITING: "waited", PacketState.NONINITIALIZED: "noninitialized"}
+
     def __init__(self, name):
         super(Queue, self).__init__()
         self.name = name
@@ -157,9 +158,10 @@ class Queue(Unpickable(pending = PackSet.create,
 
     def FilterPackets(self, filter=None):
         filter = filter or "all"
-        pf, parg = {"errored": (list, self.errored), "suspended": (list, self.suspended), 
-            "pending": (list, self.pending), "worked": (list, self.worked), "working": (Queue.GetWorkingPackets, self),
-            "waiting": (list, self.waited), "all": (Queue.ListAllPackets, self)}[filter]
+        pf, parg = {"errored": (list, self.errored), "suspended": (list, self.suspended),
+                    "pending": (list, self.pending), "worked": (list, self.worked),
+                    "working": (Queue.GetWorkingPackets, self),
+                    "waiting": (list, self.waited), "all": (Queue.ListAllPackets, self)}[filter]
         for pck in pf(parg):
             yield pck
 
@@ -175,7 +177,7 @@ class Queue(Unpickable(pending = PackSet.create,
             packets.append(pck)
         return packets
 
-    def Resume(self, resumeWorkable = False):
+    def Resume(self, resumeWorkable=False):
         self.isSuspended = False
         for pck in list(self.suspended):
             pck.Resume(resumeWorkable)
@@ -184,9 +186,9 @@ class Queue(Unpickable(pending = PackSet.create,
         self.isSuspended = True
 
     def Status(self):
-        return {"alive": self.IsAlive(), "pending": len(self.pending), "suspended": len(self.suspended), 
-            "errored": len(self.errored), "worked": len(self.worked),
-            "waiting": len(self.waited), "working": len(self.working), "working-limit": self.workingLimit}
+        return {"alive": self.IsAlive(), "pending": len(self.pending), "suspended": len(self.suspended),
+                "errored": len(self.errored), "worked": len(self.worked),
+                "waiting": len(self.waited), "working": len(self.working), "working-limit": self.workingLimit}
 
     def ChangeWorkingLimit(self, lmtValue):
         self.workingLimit = int(lmtValue)

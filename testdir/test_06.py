@@ -1,6 +1,6 @@
 import unittest
 import logging
-import remclient 
+import remclient
 import time
 import os
 import subprocess
@@ -9,7 +9,7 @@ from testdir import *
 
 class T06(unittest.TestCase):
     """Checking REM restarts consistency"""
-   
+
     def RestartService(self):
         projectDir = Config.Get().server1.projectDir
         subprocess.check_call([os.path.join(projectDir, 'start-stop-daemon.py'), "restart"])
@@ -26,7 +26,7 @@ class T06(unittest.TestCase):
 
         pck0 = self.connector.Packet(pck0name, self.timestamp, set_tag=tag0name)
         pck0.AddJob("sleep 3", set_tag=tag1name)
-        self.connector.Queue(TestingQueue.Get()).AddPacket(pck0) 
+        self.connector.Queue(TestingQueue.Get()).AddPacket(pck0)
         logging.info("packet %s(%s) added to queue %s", pck0name, pck0.id, TestingQueue.Get())
 
         self.RestartService()
@@ -43,5 +43,5 @@ class T06(unittest.TestCase):
             self.assertEqual(pck.state, "SUCCESSFULL")
             pck.Delete()
 
-        self.assertTrue(self.connector.Tag(tag0name).Check())            
+        self.assertTrue(self.connector.Tag(tag0name).Check())
         self.assertTrue(self.connector.Tag(tag1name).Check())            

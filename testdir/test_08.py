@@ -10,6 +10,7 @@ import subprocess
 import os
 import tempfile
 
+
 class T08(unittest.TestCase):
     """Check restarting tag"""
 
@@ -55,8 +56,8 @@ class T08(unittest.TestCase):
         logging.info("%s %s", pckInfo1.pck_id, pckInfo2.pck_id)
         time.sleep(1)
         # for pck in [pckInfo1, pckInfo2]:
-            # # self.assertEqual(pck.state, "SUCCESSFULL")
-            # pck.Delete()
+        # # self.assertEqual(pck.state, "SUCCESSFULL")
+        # pck.Delete()
 
     def testRestartSuccessfullPacket(self):
         pck1 = self.connector.Packet("pck-successfull-1")
@@ -71,8 +72,8 @@ class T08(unittest.TestCase):
         self.assertNotEqual(pckInfo1.state, "SUCCESSFULL")
         self.assertEqual(WaitForExecution(pckInfo1, timeout=1.0), "SUCCESSFULL")
         # for pck in [pckInfo1, pckInfo2]:
-            # # self.assertEqual(pck.state, "SUCCESSFULL")
-            # pck.Delete()
+        # # self.assertEqual(pck.state, "SUCCESSFULL")
+        # pck.Delete()
 
 
     def testRestoringDirectory(self):
@@ -96,17 +97,17 @@ class T08(unittest.TestCase):
         tag = "tag-start-%.0f" % time.time()
         pck = self.connector.Packet("pck-restore-file", wait_tags=[tag])
         with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >>script_printer, "#!/usr/bin/env python"
-            print >>script_printer, "print >>open('../test', 'w'), 42"
+            print >> script_printer, "#!/usr/bin/env python"
+            print >> script_printer, "print >>open('../test', 'w'), 42"
             script_printer.flush()
-            j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py" : script_printer.name}, tries=2)
+            j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py": script_printer.name}, tries=2)
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)
         with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >>script_printer, "#!/usr/bin/env python"
-            print >>script_printer, "print >>open('../test', 'w'), 43"
+            print >> script_printer, "#!/usr/bin/env python"
+            print >> script_printer, "print >>open('../test', 'w'), 43"
             script_printer.flush()
-            pck.AddFiles({"testfile.py" : script_printer.name})
+            pck.AddFiles({"testfile.py": script_printer.name})
         self.connector.Tag(tag).Set()
         self.assertEqual(WaitForExecution(pckInfo), "SUCCESSFULL")
         with ServiceTemporaryShutdown(self.srvdir):
@@ -123,12 +124,12 @@ class T08(unittest.TestCase):
         tag = "tag-start-%.0f" % time.time()
         pck = self.connector.Packet("pck-restore-file", wait_tags=[tag])
         with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >>script_printer, "#!/usr/bin/env python"
-            print >>script_printer, "print 42"
+            print >> script_printer, "#!/usr/bin/env python"
+            print >> script_printer, "print 42"
             script_printer.flush()
-            j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py" : script_printer.name}, tries=2)
+            j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py": script_printer.name}, tries=2)
             with open(script_printer.name, "r") as reader:
-                md5sum=hashlib.md5(reader.read()).hexdigest()
+                md5sum = hashlib.md5(reader.read()).hexdigest()
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)
         self.connector.Tag(tag).Set()

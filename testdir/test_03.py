@@ -1,6 +1,6 @@
 import unittest
 import logging
-import remclient 
+import remclient
 import time
 import tempfile
 from testdir import *
@@ -8,7 +8,7 @@ from testdir import *
 
 class T03(unittest.TestCase):
     """Checking for environment intaractions"""
-    
+
     def setUp(self):
         self.connector = Config.Get().server1.connector
 

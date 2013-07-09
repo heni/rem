@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from testdir import *
 
+
 class T04(unittest.TestCase):
     """Checking for interesting boundary cases"""
 
@@ -24,16 +25,16 @@ class T04(unittest.TestCase):
             elif osType == "Linux":
                 pck.AddJob("./lockf.sh", tries=1)
                 with tempfile.NamedTemporaryFile(suffix="-lockf.sh") as script_pr:
-                    print >>script_pr, """
-#!/usr/bin/env bash
-set -eu
-lockfile-create {lockfile}
-lockfile-touch {lockfile} &
-BADGER="$!"
-sleep 2
-kill $BADGER
-lockfile-remove {lockfile}
-""".format(lockfile="/tmp/" + pckname)
+                    print >> script_pr, """
+                                        #!/usr/bin/env bash
+                                        set -eu
+                                        lockfile-create {lockfile}
+                                        lockfile-touch {lockfile} &
+                                        BADGER="$!"
+                                        sleep 2
+                                        kill $BADGER
+                                        lockfile-remove {lockfile}
+                                        """.format(lockfile="/tmp/" + pckname)
                     script_pr.flush()
                     pck.AddFiles({"lockf.sh": script_pr.name})
             else:
@@ -72,14 +73,16 @@ lockfile-remove {lockfile}
         tm = time.time()
         tgPrfx = "chain-%.0f" % tm
         strtTag = "chain-start-%.0f" % tm
-        waitings = [strtTag]; pckList = []
+        waitings = [strtTag];
+        pckList = []
         logging.info("start long chain adding")
         for idx in xrange(1000):
             pckname = "sleeptest-%.0f-%s" % (tm, idx)
             pck = self.connector.Packet(pckname, time.time(), wait_tags=waitings, set_tag="%s-%d" % (tgPrfx, idx))
             pck.AddJob("echo .")
             self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
-            waitings = ["%s-%d" % (tgPrfx, idx)]; pckList.append(pck)
+            waitings = ["%s-%d" % (tgPrfx, idx)];
+            pckList.append(pck)
         self.connector.Tag(strtTag).Set()
         pckInfo = self.connector.PacketInfo(pckList[-1].id)
         self.assertEqual(WaitForExecution(pckInfo, timeout=10.0), "SUCCESSFULL")
@@ -167,14 +170,14 @@ lockfile-remove {lockfile}
 
             connector = copy.copy(self.connector)
             connector.checksumDbPath = dbFile
-                
+
             pckname = "unreadable-db-%.f" % time.time()
             pck = connector.Packet(pckname, time.time())
             pck.AddJob("cat data.txt")
-            
+
             with tempfile.NamedTemporaryFile(dir=tmp_dir, suffix=".txt") as f:
                 for _ in xrange(100):
-                    print >>f, _
+                    print >> f, _
                 f.flush()
                 pck.AddFiles({"data.txt": f.name})
 

@@ -9,7 +9,6 @@ threading.stack_size(STACK_SZ)
 
 
 class KillableWorker(threading.Thread):
-
     def __init__(self):
         super(KillableWorker, self).__init__()
         self.killed = False
@@ -88,7 +87,7 @@ class XMLRPCWorker(KillableWorker):
 
 #awful threading.Thread doesn't care about starting other constructors over super object, 
 #       therefore threading classes must be last in parents list
-class TimeTicker(CallbackHolder, KillableWorker): 
+class TimeTicker(CallbackHolder, KillableWorker):
     TICK_PERIOD = 1.0
 
     def __init__(self):

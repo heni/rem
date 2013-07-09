@@ -10,7 +10,6 @@ __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
 
 
 class GlobalPacketStorage(object):
-    
     def __init__(self):
         self.box = weakref.WeakValueDictionary()
 
@@ -26,10 +25,10 @@ class GlobalPacketStorage(object):
         return self.box.get(id)
 
 
-class ShortStorage(Unpickable(packets = (TimedMap.create, {}), 
-                              lock = PickableLock.create)):
+class ShortStorage(Unpickable(packets=(TimedMap.create, {}),
+                              lock=PickableLock.create)):
     PCK_LIFETIME = 1800
-    
+
     def __getstate__(self):
         self.forgetOldItems()
         sdict = self.__dict__.copy()
@@ -62,7 +61,7 @@ class ShortStorage(Unpickable(packets = (TimedMap.create, {}),
             return self.packets.pop(id)[1][1]
 
 
-class BinaryStorage(Unpickable(files = dict, lifeTime = (int, 3600), binDirectory=str)):
+class BinaryStorage(Unpickable(files=dict, lifeTime=(int, 3600), binDirectory=str)):
     digest_length = 32
 
     def __init__(self):
@@ -75,7 +74,7 @@ class BinaryStorage(Unpickable(files = dict, lifeTime = (int, 3600), binDirector
         return getattr(super(BinaryStorage, self), "__getstate__", lambda: sdict)()
 
     @classmethod
-    def create(cls, o = None):
+    def create(cls, o=None):
         if o is None:
             return cls()
         if isinstance(o, BinaryStorage):
@@ -153,6 +152,7 @@ class BinaryStorage(Unpickable(files = dict, lifeTime = (int, 3600), binDirector
 
 class TagWrapper(object):
     __slots__ = ["inner", "__reduce_ex__"]
+
     def __init__(self, tag):
         self.inner = tag
 
@@ -231,7 +231,7 @@ class TagStorage(object):
     def ListTags(self, name_regex=None, prefix=None, memory_only=True):
         for name, tag in self.inmem_items.iteritems():
             if name and (not prefix or name.startswith(prefix)) \
-                    and (not name_regex or name_regex.match(name)):
+                and (not name_regex or name_regex.match(name)):
                 yield name, tag.IsSet()
         if memory_only:
             return
@@ -272,4 +272,3 @@ class TagStorage(object):
                 tag.callbacks.clear()
                 self.infile_items[name] = cPickle.dumps(tag)
             self.infile_items.sync()
-
