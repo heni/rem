@@ -1,14 +1,12 @@
 import logging
 import hashlib
-import shutil
 import time
 import unittest
-import stat
-import remclient
-from testdir import *
-import subprocess
 import os
 import tempfile
+
+import remclient
+from testdir import *
 
 
 class T08(unittest.TestCase):

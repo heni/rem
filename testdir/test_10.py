@@ -1,13 +1,10 @@
 import logging
-import hashlib
-import shutil
 import time
 import unittest
+import subprocess
+
 import remclient
 from testdir import *
-import subprocess
-import os
-import shutil
 
 
 class T10(unittest.TestCase):

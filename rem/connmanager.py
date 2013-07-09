@@ -1,6 +1,4 @@
 import threading
-import time
-import random
 import xmlrpclib
 import select
 import bsddb3
@@ -10,7 +8,7 @@ import cPickle
 import subprocess
 
 from common import *
-from callbacks import Tag, RemoteTag, ICallbackAcceptor
+from callbacks import Tag, ICallbackAcceptor
 
 
 class ClientInfo(Unpickable(taglist=set,

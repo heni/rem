@@ -85,8 +85,18 @@
     HISTORIED   - пакет задач удален из очереди выполнения
 """
 from __future__ import with_statement
-import xmlrpclib, time, os, re, hashlib, getpass
-import types, socket, sys, itertools, warnings
+import xmlrpclib
+import time
+import os
+import re
+import hashlib
+import getpass
+import types
+import socket
+import sys
+import itertools
+import warnings
+
 __all__ = ["AdminConnector", "Connector"]
 MAX_PRIORITY = 2**31 - 1
 

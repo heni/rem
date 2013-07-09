@@ -1,15 +1,11 @@
 from __future__ import with_statement
-
 import itertools
-import copy, time, logging, os, re
+import time
+import logging
 
 from common import *
 from callbacks import *
 from packet import *
-from job import *
-from packet import *
-from storages import *
-from workers import *
 
 
 class Queue(Unpickable(pending=PackSet.create,

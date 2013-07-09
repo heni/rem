@@ -1,10 +1,16 @@
 from __future__ import with_statement
-import itertools, logging, os, sys, time, weakref, copy
-import bsddb3, cPickle
+import logging
+import os
+import sys
+import time
+import weakref
+import bsddb3
+import cPickle
 
 from common import *
-from callbacks import Tag, RemoteTag, ICallbackAcceptor
+from callbacks import Tag, RemoteTag
 from journal import TagLogger
+
 
 __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
 

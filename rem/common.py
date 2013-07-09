@@ -5,7 +5,10 @@ import hashlib
 import logging
 import os
 import shutil
-import tempfile, threading, time, types
+import tempfile
+import threading
+import time
+import types
 import re
 import xmlrpclib
 

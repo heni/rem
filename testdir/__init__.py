@@ -1,6 +1,6 @@
-from common import *
-
 import logging
+
+from common import *
 from test_01 import *
 from test_02 import *
 from test_03 import *

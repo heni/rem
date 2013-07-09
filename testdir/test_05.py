@@ -1,7 +1,7 @@
 import unittest
-import logging
-import remclient
 import time
+
+import remclient
 from testdir import *
 
 

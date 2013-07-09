@@ -3,8 +3,12 @@
 from __future__ import with_statement
 import logging
 import os
-import signal, stat, subprocess, sys
-import threading, time
+import signal
+import stat
+import subprocess
+import sys
+import threading
+import time
 
 
 class Signals(object):

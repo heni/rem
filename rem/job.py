@@ -1,9 +1,11 @@
 from __future__ import with_statement
-import subprocess, logging, sys, tempfile, os, time, shutil
+import subprocess
+import logging
+import os
+import time
 import threading
 
 from callbacks import *
-from common import *
 import osspec
 import packet
 

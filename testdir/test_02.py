@@ -5,7 +5,6 @@ import tempfile
 import subprocess
 from threading import Thread
 import copy
-import thread
 import xmlrpclib
 
 import remclient

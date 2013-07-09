@@ -1,4 +1,6 @@
-import cStringIO, time
+import cStringIO
+import time
+
 from packet import PacketState, PacketFlag
 
 

@@ -1,19 +1,16 @@
 from __future__ import with_statement
-import copy, time, logging, os, re
-import itertools
+import copy
+import time
+import logging
+import os
+import re
 from collections import deque
 from cPickle import Pickler, Unpickler
 import gc
 
 from queue import *
-from common import *
-from workers import *
-from callbacks import *
-from packet import *
-from job import *
-from storages import *
 from connmanager import *
-import osspec
+from rem.storages import *
 
 
 class SchedWatcher(Unpickable(tasks=TimedSet.create,

@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 from __future__ import with_statement
-import os, logging, sys
-import optparse, signal, time
+import os
+import logging
+import sys
+import optparse
+import signal
+import time
+
 
 INFINITY = float('inf')
 

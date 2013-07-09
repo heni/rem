@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 from __future__ import with_statement
-import cStringIO
 import logging
-import os, re
-import select, signal, sys
+import os
+import re
+import select
+import signal
+import sys
 import socket
 import time
 import threading

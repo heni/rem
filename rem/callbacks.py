@@ -1,4 +1,7 @@
-import weakref, threading, logging, itertools
+import weakref
+import logging
+import itertools
+
 from common import *
 
 

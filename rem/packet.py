@@ -1,9 +1,11 @@
 from __future__ import with_statement
-
-import logging, tempfile, os, time, shutil
+import logging
+import tempfile
+import os
+import time
+import shutil
 
 from callbacks import *
-from common import *
 from job import *
 import osspec
 

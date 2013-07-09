@@ -3,8 +3,7 @@ import bsddb3
 import cPickle
 
 from common import *
-from callbacks import Tag, RemoteTag, ICallbackAcceptor
-import storages
+from callbacks import ICallbackAcceptor
 
 
 class TagEvent(object):
@@ -110,4 +109,3 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
                 file_time = int(filename.split("-")[-1])
                 if file_time < final_time:
                     os.remove(os.path.join(dirname, filename))
-

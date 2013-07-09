@@ -1,8 +1,12 @@
 import copy
-import threading, logging, time, signal
+import threading
+import logging
+import time
+import Queue as StdQueue
+
 import osspec
 from callbacks import CallbackHolder
-import Queue as StdQueue
+
 
 STACK_SZ = 1 << 18 # 4MB default stack size for threads
 threading.stack_size(STACK_SZ)
