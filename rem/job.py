@@ -116,8 +116,6 @@ class Job(Unpickable(err=nullobject,
         self.pids = pids
         try:
             self.tries += 1
-            if self.tries > self.maxTryCount:
-                raise Exception("Job id={} with shell `{}` :max try count".format(self.id, self.shell))
             self.FireEvent("start")
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
@@ -134,14 +132,15 @@ class Job(Unpickable(err=nullobject,
                 pids.remove(process.pid)
             self.results.append(result)
             if result.IsFailed() and self.tries >= self.maxTryCount and \
-                    self.packetRef.state == packet.PacketState.WORKABLE:
+                    self.packetRef.state in (packet.PacketState.WORKABLE, packet.PacketState.PENDING):
                 self.results.append(TriesExceededResult(self.tries))
+                if self.packetRef.kill_all_jobs_on_error:
+                    self.packetRef.UserSuspend(kill_jobs=True)
+                    self.packetRef.changeState(packet.PacketState.ERROR)
+                    logging.info("Job`s %s result: TriesExceededResult", self.id)
         except Exception, e:
             logging.exception("Run job %s exception: %s", self.id, e.message)
-            #TODO: check for thread-safety
-            if self.packetRef.kill_all_jobs_on_error:
-                self.packetRef.UserSuspend(kill_jobs=True)
-                self.packetRef.changeState(packet.PacketState.ERROR)
+
         finally:
             self.CloseStreams()
             self.FireEvent("done")

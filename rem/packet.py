@@ -520,11 +520,14 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
         self.ClearFlag(PacketFlag.USER_SUSPEND)
         self.Resume()
 
-    def KillJobs(self):
+    def GetWorkingJobs(self):
         with self.lock:
             working_copy = list(self.working)
-        for job_id in working_copy:
-            job = self.jobs[job_id]
+        for jid in working_copy:
+            yield self.jobs[jid]
+
+    def KillJobs(self):
+        for job in self.GetWorkingJobs():
             job.Terminate()
 
     def Reset(self):
@@ -552,11 +555,6 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
                 tag.Reset()
         self.Reset()
 
-    def GetWorkingJobs(self):
-        with self.lock:
-            working_copy = list(self.working)
-        for jid in working_copy:
-            yield self.jobs[jid]
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in
 # job module.
