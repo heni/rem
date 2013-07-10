@@ -1,5 +1,5 @@
 #coding: utf-8
-"""Library for communicating with Robust Execute Manager (https://wiki.yandex-team.ru/EvgenijjKroxalev/rem)
+"""Library for communicating with Robust Execute Manager
 
 Краткое описание работы с библиотекой
 
