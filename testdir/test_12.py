@@ -5,6 +5,7 @@ import tempfile
 import remclient
 from testdir import *
 
+
 class T12(unittest.TestCase):
     """REM speed tests"""
 
@@ -29,11 +30,11 @@ class T12(unittest.TestCase):
             pck = self.connector.Packet(
                 'checksum_test',
                 time.time(),
-                wait_tags = [],
-                notify_emails = self.notifyEmails
+                wait_tags=[],
+                notify_emails=self.notifyEmails
             )
-            pck.AddJob(shell = 'true')
-            pck.AddFiles({'test.bin' : filePath})
+            pck.AddJob(shell='true')
+            pck.AddFiles({'test.bin': filePath})
             queue.AddPacket(pck)
 
     def testChecksumCache(self):
@@ -54,7 +55,8 @@ class T12(unittest.TestCase):
             self.connector.checksumDbPath = None
             start = time.time()
             self.__addPackages(hugeFile.name, repeat_count)
-            logging.info('Adding %d packages without usage checksum cache: %f seconds' % (repeat_count, time.time() - start))
+            logging.info(
+                'Adding %d packages without usage checksum cache: %f seconds' % (repeat_count, time.time() - start))
 
             self.connector.checksumDbPath = self.checksumDbPath
             start = time.time()

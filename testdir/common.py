@@ -3,22 +3,26 @@ import logging
 import os.path
 import subprocess
 import remclient
+
 __all__ = ["PrintPacketResults", "TestingQueue", "LmtTestQueue", "Config",
-    "WaitForExecution", "WaitForExecutionList", "PrintCurrentWorkingJobs",
-    "ServiceTemporaryShutdown"]
+           "WaitForExecution", "WaitForExecutionList", "PrintCurrentWorkingJobs",
+           "ServiceTemporaryShutdown"]
+
 
 class SharedValue(object):
     def __init__(self, value=None):
         self.value = value
+
     def Get(self):
         return self.value
+
 
 TestingQueue = SharedValue()
 LmtTestQueue = SharedValue()
 Config = SharedValue()
 
 
-def WaitForExecution(pckInfo, fin_states = ("SUCCESSFULL", "ERROR"), timeout=1.0):
+def WaitForExecution(pckInfo, fin_states=("SUCCESSFULL", "ERROR"), timeout=1.0):
     while True:
         pckInfo.update()
         logging.info("packet state: %s", pckInfo.state)
@@ -33,7 +37,6 @@ def PrintPacketResults(pckInfo):
         print job.shell, "\n".join(r.data for r in job.results)
 
 
-
 def WaitForExecutionList(pckList, fin_states=("SUCCESSFULL", "ERROR"), timeout=1.0):
     while True:
         remclient.JobPacketInfo.multiupdate(pckList)
@@ -42,6 +45,7 @@ def WaitForExecutionList(pckList, fin_states=("SUCCESSFULL", "ERROR"), timeout=1
         if waitPckCount == 0:
             return
         time.sleep(timeout)
+
 
 def PrintCurrentWorkingJobs(queue):
     workingPackets = queue.ListPackets("working")

@@ -3,11 +3,15 @@
 from __future__ import with_statement
 import logging
 import os
-import signal, stat, subprocess, sys
-import threading, time
+import signal
+import stat
+import subprocess
+import sys
+import threading
+import time
+
 
 class Signals(object):
-
     def __init__(self):
         self.handlers = {signal.SIGINT: []}
         self.lock = threading.Lock()
@@ -36,6 +40,7 @@ class Signals(object):
             if len(self.handlers) == 1:
                 signal.signal(signum, self.handlers.pop(signum)[0])
 
+
 signals = Signals()
 
 
@@ -44,6 +49,8 @@ def is_pid_alive(pid):
 
 
 KILL_TICK = 0.001
+
+
 def terminate(pid):
     try:
         os.kill(pid, signal.SIGTERM)
@@ -70,7 +77,7 @@ def release_signal_handler(signum, handler):
     signals.release(signum, handler)
 
 
-def create_symlink(src, dst, reallocate = True):
+def create_symlink(src, dst, reallocate=True):
     if reallocate and os.path.islink(dst):
         os.unlink(dst)
     return os.symlink(src, dst)
@@ -80,9 +87,11 @@ def set_common_executable(path):
     mode = os.stat(path)[0] | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
     os.chmod(path, mode)
 
+
 def set_common_readable(path):
     mode = os.stat(path)[0] | stat.S_IRUSR | stat.S_IRGRP | stat.S_IROTH
     os.chmod(path, mode)
+
 
 def get_shell_location(_cache=[]):
     if not _cache:
@@ -91,9 +100,9 @@ def get_shell_location(_cache=[]):
 
 
 def send_email(emails, subject, message):
-    sender = subprocess.Popen(["sendmail"] + map(str, emails), stdin = subprocess.PIPE)
-    print >>sender.stdin, \
-"""Subject: %(subject)s
+    sender = subprocess.Popen(["sendmail"] + map(str, emails), stdin=subprocess.PIPE)
+    print >> sender.stdin, \
+        """Subject: %(subject)s
 To: %(email-list)s
 
 %(message)s
