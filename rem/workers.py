@@ -1,15 +1,18 @@
 import copy
-import threading, logging, time, signal
+import threading
+import logging
+import time
+import Queue as StdQueue
+
 import osspec
 from callbacks import CallbackHolder
-import Queue as StdQueue
+
 
 STACK_SZ = 1 << 18 # 4MB default stack size for threads
 threading.stack_size(STACK_SZ)
 
 
 class KillableWorker(threading.Thread):
-
     def __init__(self):
         super(KillableWorker, self).__init__()
         self.killed = False
@@ -88,7 +91,7 @@ class XMLRPCWorker(KillableWorker):
 
 #awful threading.Thread doesn't care about starting other constructors over super object, 
 #       therefore threading classes must be last in parents list
-class TimeTicker(CallbackHolder, KillableWorker): 
+class TimeTicker(CallbackHolder, KillableWorker):
     TICK_PERIOD = 1.0
 
     def __init__(self):

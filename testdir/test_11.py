@@ -5,6 +5,7 @@ import xmlrpclib
 
 from testdir import *
 
+
 class T11(unittest.TestCase):
     """Testing readonly server interface"""
 

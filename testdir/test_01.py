@@ -3,9 +3,10 @@ import logging
 import remclient
 from testdir import *
 
+
 class T01(unittest.TestCase):
     """Statistics functionality"""
-    
+
     def setUp(self):
         self.connector = Config.Get().server1.connector
 
@@ -24,8 +25,8 @@ class T01(unittest.TestCase):
         logging.info("LmtTestQueue %s status: %s", LmtTestQueue.Get(), queue.Status())
 
     def testPrefixListings(self):
-        __tags  = self.connector.ListObjects("tags", "_")
-        u_tags  = self.connector.ListObjects("tags", "u")
+        __tags = self.connector.ListObjects("tags", "_")
+        u_tags = self.connector.ListObjects("tags", "u")
         user_qs = self.connector.ListObjects("queues", "user")
         logging.info("__tags count: %d, u_tags count: %d, user_qs count: %d", len(__tags), len(u_tags), len(user_qs))
 

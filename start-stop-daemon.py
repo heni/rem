@@ -1,9 +1,15 @@
 #!/usr/bin/env python
 from __future__ import with_statement
-import os, logging, sys
-import optparse, signal, time
+import os
+import logging
+import sys
+import optparse
+import signal
+import time
+
 
 INFINITY = float('inf')
+
 
 def cwd_to_path():
     dir, name = os.path.split(sys.argv[0])
@@ -14,11 +20,12 @@ def parse_args():
     parser = optparse.OptionParser()
     modes = ("check-start", "restart", "start", "status", "stop")
     parser.set_defaults()
-    parser.add_option("--restart", dest = "mode", action = "store_const", const = "restart", help = "restart service")
-    parser.add_option("--stop", dest = "mode", action = "store_const", const = "stop", help = "stop service")
-    parser.add_option("--start", dest = "mode", action = "store_const", const = "start", help = "start service")
-    parser.add_option("--check-start", dest = "mode", action = "store_const", const = "check-start", help = "check service and start if needed (default)")
-    parser.add_option("--status", dest = "mode", action = "store_const", const = "status", help = "print service work status")
+    parser.add_option("--restart", dest="mode", action="store_const", const="restart", help="restart service")
+    parser.add_option("--stop", dest="mode", action="store_const", const="stop", help="stop service")
+    parser.add_option("--start", dest="mode", action="store_const", const="start", help="start service")
+    parser.add_option("--check-start", dest="mode", action="store_const", const="check-start",
+                      help="check service and start if needed (default)")
+    parser.add_option("--status", dest="mode", action="store_const", const="status", help="print service work status")
     opt, args = parser.parse_args()
     if opt.mode is None:
         if len(args) >= 1 and args[0] in modes:
@@ -31,7 +38,7 @@ def parse_args():
 
 def waitpid_ex(pid, opts):
     class WaitPidResult(object):
-        def __init__(self): 
+        def __init__(self):
             self.pid = self.exitCode = self.error = None
 
     result = WaitPidResult()
@@ -39,15 +46,14 @@ def waitpid_ex(pid, opts):
         wpid, status = os.waitpid(pid, opts)
         result.pid = wpid
         result.exitCode = os.WTERMSIG(status) if os.WIFSIGNALED(status) else \
-                            (os.WEXITSTATUS(status) if os.WIFEXITED(status) else None)
+            (os.WEXITSTATUS(status) if os.WIFEXITED(status) else None)
     except OSError, e:
         result.error = e
     return result
 
 
 class LogPrinter(object):
-
-    def __init__(self, print_timeout = 1.0):
+    def __init__(self, print_timeout=1.0):
         self.timeout = print_timeout
         self.last = time.time()
 
@@ -76,7 +82,6 @@ class LogPrinter(object):
 
 
 class Service(object):
-
     def __init__(self, runargs, pidfile, logfile, name=None, checkname=None):
         self.runArgs = runargs
         self.pidFile = pidfile
@@ -109,13 +114,13 @@ class Service(object):
         except:
             logging.exception("error while reading process status")
 
-    def CheckService(self, timeout = 0.0):
+    def CheckService(self, timeout=0.0):
         time.sleep(timeout)
         return True
 
-    def StartDaemon(self, timeout = 10.0):
+    def StartDaemon(self, timeout=10.0):
         stTime = time.time()
-        logger = LogPrinter(print_timeout = 1.0)
+        logger = LogPrinter(print_timeout=1.0)
         logger.start("starting daemon %s" % self.name)
         if os.path.isfile(self.pidFile):
             os.unlink(self.pidFile)
@@ -132,17 +137,18 @@ class Service(object):
                 os.execvp(executable, self.runArgs)
             else:
                 with open(self.pidFile, "w") as writer:
-                    print >>writer, pid
+                    print >> writer, pid
                 while time.time() - stTime <= timeout:
                     wres = waitpid_ex(pid, os.WNOHANG)
                     if wres.pid == pid:
                         if wres.error:
                             import traceback
+
                             logwrite = open(self.logFile, "a")
                             traceback.print_exc(file=logwrite)
                             wres.exitCode = 1
                         sys.exit(wres.exitCode)
-                    if self.CheckService(timeout = 1.0):
+                    if self.CheckService(timeout=1.0):
                         sys.exit(0)
                 sys.exit(1)
         try:
@@ -162,9 +168,9 @@ class Service(object):
         except KeyboardInterrupt:
             logger.interrupt()
 
-    def Stop(self, signum = signal.SIGTERM, timeout = 10.0):
+    def Stop(self, signum=signal.SIGTERM, timeout=10.0):
         stTime = time.time()
-        logger = LogPrinter(print_timeout = 1.0)
+        logger = LogPrinter(print_timeout=1.0)
         logger.start("stopping daemon %s" % self.name)
         pid = self.CheckProcess()
         if pid > 0:
@@ -193,28 +199,30 @@ class Service(object):
 
 
 class REMService(Service):
-    
     def __init__(self):
         self.Configure()
         runArgs = ["python", "rem-server.py", "start"]
         if self.setupScript: runArgs = ["/bin/sh", "-c", " ".join([self.setupScript, "&&", "exec"] + runArgs)]
-        super(REMService, self).__init__(runargs=runArgs, pidfile="var/rem.pid", logfile="var/rem.errlog", name="remd", 
+        super(REMService, self).__init__(runargs=runArgs, pidfile="var/rem.pid", logfile="var/rem.errlog", name="remd",
                                          checkname="python")
 
     def Configure(self):
         import ConfigParser
+
         configFile = "rem.cfg"
         configParser = ConfigParser.ConfigParser()
         if configFile not in configParser.read(configFile):
             raise EnvironmentError("some errors in configuration file \"%s\"" % configFile)
         self.serverURL = "http://localhost:%d/" % configParser.getint("server", "port")
-        self.setupScript = ". %s" % configParser.get("run", "setup_script") if configParser.has_option("run", "setup_script") else ""
+        self.setupScript = ". %s" % configParser.get("run", "setup_script") if configParser.has_option("run",
+                                                                                                       "setup_script") else ""
 
-    def CheckService(self, timeout = 0.0):
+    def CheckService(self, timeout=0.0):
         endTime = time.time() + timeout
         try:
             import xmlrpclib
-            proxy = xmlrpclib.ServerProxy(self.serverURL, allow_none = True)
+
+            proxy = xmlrpclib.ServerProxy(self.serverURL, allow_none=True)
             proxy.check_tag("start_tag")
             return True
         except:
@@ -222,8 +230,8 @@ class REMService(Service):
             with open(self.logFile, "a") as log_printer:
                 eTp, eVal, tb = sys.exc_info()
                 co = tb.tb_frame.f_code
-                print >>log_printer, "service checking error (file=\"%s:%d\", method=\"%s\"): %s" \
-                                   % (co.co_filename, tb.tb_lineno, co.co_name, eVal) 
+                print >> log_printer, "service checking error (file=\"%s:%d\", method=\"%s\"): %s" \
+                                      % (co.co_filename, tb.tb_lineno, co.co_name, eVal)
             return False
 
 
@@ -244,9 +252,9 @@ def dispatch_work(service, opt, args):
     if opt.mode in ("stop", "restart"):
         pid = service.CheckProcess()
         if pid:
-            service.Stop(timeout = INFINITY)
+            service.Stop(timeout=INFINITY)
     if opt.mode in ("start", "restart", "check-start") and not service.CheckProcess():
-        service.StartDaemon(timeout = INFINITY)
+        service.StartDaemon(timeout=INFINITY)
 
 
 if __name__ == "__main__":

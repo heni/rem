@@ -3,13 +3,13 @@ import bsddb3
 import cPickle
 
 from common import *
-from callbacks import Tag, RemoteTag, ICallbackAcceptor
-import storages
+from callbacks import ICallbackAcceptor
 
 
 class TagEvent(object):
     def __init__(self, tagname):
         self.tagname = tagname
+
     def Redo(self, *args, **kws):
         raise NotImplementedError
 
@@ -29,7 +29,7 @@ class ResetTagEvent(TagEvent):
         tag_logger.tagRef.ResetTag(self.tagname)
 
 
-class TagLogger(Unpickable(lock = PickableRLock.create), ICallbackAcceptor):
+class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
     def __init__(self, tagRef):
         super(TagLogger, self).__init__()
         self.file = None
@@ -69,6 +69,7 @@ class TagLogger(Unpickable(lock = PickableRLock.create), ICallbackAcceptor):
     def Restore(self):
         logging.debug("TagLogger.Restore")
         dirname, db_filename = os.path.split(self.db_file)
+
         def get_filenames():
             result = []
             for filename in os.listdir(dirname):
@@ -108,4 +109,3 @@ class TagLogger(Unpickable(lock = PickableRLock.create), ICallbackAcceptor):
                 file_time = int(filename.split("-")[-1])
                 if file_time < final_time:
                     os.remove(os.path.join(dirname, filename))
-
