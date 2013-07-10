@@ -93,7 +93,8 @@ def set_common_readable(path):
     os.chmod(path, mode)
 
 
-def get_shell_location(_cache=[]):
+def get_shell_location(_cache=None):
+    if not _cache: _cache = []
     if not _cache:
         _cache += [path for path in ("/bin/bash", "/usr/local/bin/bash", "/bin/sh") if os.access(path, os.X_OK)]
     return _cache[0]
