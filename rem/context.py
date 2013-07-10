@@ -3,6 +3,7 @@ import logging.handlers
 import os
 import time
 from ConfigParser import ConfigParser, NoOptionError
+import codecs
 
 
 class StableRotateFileHandler(logging.handlers.TimedRotatingFileHandler):
@@ -16,7 +17,7 @@ class StableRotateFileHandler(logging.handlers.TimedRotatingFileHandler):
         if time.time() - self.lastReopen > self.REOPEN_TM:
             self.stream.close()
             if self.encoding:
-                self.stream = logging.codecs.open(self.baseFilename, "a", self.encoding)
+                self.stream = codecs.open(self.baseFilename, "a", self.encoding)
             else:
                 self.stream = open(self.baseFilename, "a")
             lastReopen = time.time()
