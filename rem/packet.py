@@ -263,14 +263,18 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                            state=(str, PacketState.CREATED),
                            history=(list, []),
                            notify_emails=(list, []),
-                           flags=int),
+                           flags=int,
+                           last_update_time = zeroint,
+                           working_time = int,
+                           _notified = bool
+                ),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
     INCORRECT = -1
 
-    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True):
-        getattr(super(JobPacket, self), "__init__")()
+    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True, notify_timeout=60 * 60 * 24 * 7):
+        super(JobPacket, self).__init__()
         self.name = name
         self.state = PacketState.NONINITIALIZED
         self.Init(context)
@@ -281,6 +285,27 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.SetWaitingTags(wait_tags)
         self.done_indicator = set_tag
         self.kill_all_jobs_on_error = kill_all_jobs_on_error
+        self.notify_timeout = notify_timeout
+        self.last_update_time = None
+        self.working_time = 0
+        self._notified = False
+        self.context = context
+
+    def _checkNotificationTime(self):
+        if self.working_time >= self.notify_timeout:
+            from messages import GetLongExecutionWarningHelper
+            msg_helper = GetLongExecutionWarningHelper(self, self.context)
+            SendEmail(self.notify_emails, msg_helper)
+            self._notified = True
+
+    def UpdateWorkingTime(self):
+        if self._notified:
+            return
+        now = time.time()
+        if self.last_update_time:
+            self.working_time += now - self.last_update_time
+            self._checkNotificationTime()
+        self.last_update_time = now
 
     def Init(self, context):
         logging.info("packet init: %r %s", self, self.state)
@@ -357,6 +382,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         return True
 
     def OnStart(self, ref):
+        self.UpdateWorkingTime()
         if not hasattr(self, "waitJobs"):
             self.UpdateJobsDependencies()
         if isinstance(ref, Job):
