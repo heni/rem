@@ -185,7 +185,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 logging.info("memory changes: %s", heapsDiff)
                 logging.debug("GC collecting result %s", gc.collect())
             except Exception, e:
-                logging.exception("%s", e.message)
+                logging.exception("%s", e)
 
     def __reduce__(self):
         return nullobject, ()
@@ -225,7 +225,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                             shutil.copytree(pck.directory, dst_loc)
                             pck.directory = dst_loc
                         except Exception, e:
-                            logging.exception("relocation FAIL : %s", e.message)
+                            logging.exception("relocation FAIL : %s", e)
                             dstStorage = None
                 else:
                     if pck.state != PacketState.SUCCESSFULL:

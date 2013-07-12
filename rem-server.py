@@ -61,7 +61,7 @@ def CreateScheduler(context, canBeClear=False):
                         sched.Deserialize(backupReader)
                     return sched
                 except Exception, e:
-                    logging.exception("can't restore from file \"%s\" : %s", backupFile, e.message)
+                    logging.exception("can't restore from file \"%s\" : %s", backupFile, e)
                     wasRestoreTry = True
     if wasRestoreTry and not canBeClear:
         raise RuntimeError("can't restore from backup")
@@ -398,7 +398,7 @@ class RemDaemon(object):
                 try:
                     self.scheduler.RollBackup()
                 except Exception, e:
-                    logging.exception("rem-server\tbackup error : ", e.message)
+                    logging.exception("rem-server\tbackup error : ", e)
                 finally:
                     nextBackupTime = time.time() + self.scheduler.backupPeriod
             time.sleep(TIMEOUT)

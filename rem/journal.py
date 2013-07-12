@@ -89,7 +89,7 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
                         obj = cPickle.loads(v)
                         obj.Redo(self)
                     except Exception, e:
-                        logging.exception("occurred in TagLogger while restoring from a journal : %s", e.message)
+                        logging.exception("occurred in TagLogger while restoring from a journal : %s", e)
                 f.close()
             self.restoring_mode = False
 
