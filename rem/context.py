@@ -43,7 +43,8 @@ class ConfigReader(ConfigParser):
         except NoOptionError:
             return default
 
-    def safe_getlist(self, section, option, default=[]):
+    def safe_getlist(self, section, option, default=None):
+        if not default: default = []
         try:
             value = self.get(section, option)
             return [item.strip() for item in value.split(",") if item.strip()]
