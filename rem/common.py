@@ -285,11 +285,10 @@ def GeneralizedSet(priorAttr):
     class _packset(PriorityQueue):
         @classmethod
         def create(cls, list=None):
-            if not list: list = []
             if isinstance(list, cls):
                 return list
             obj = cls()
-            map(obj.add, list)
+            map(obj.add, list or [])
             return obj
 
         def add(self, pck):
