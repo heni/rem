@@ -231,11 +231,10 @@ class TimedSet(PriorityQueue, Unpickable(lock=PickableLock)):
 
     @classmethod
     def create(cls, list=None):
-        if not list: list = []
         if isinstance(list, cls):
             return list
         obj = cls()
-        map(obj.add, list)
+        map(obj.add, list or [])
         return obj
 
     def add(self, obj, tm=None):
