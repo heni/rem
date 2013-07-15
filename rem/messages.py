@@ -22,9 +22,10 @@ def GetEmergencyHelper(pck, ctx):
     if ctx and ctx.send_emails:
         return EmergencyError(pck, ctx)
 
-def GetLongExecutionWarningHelper(pck, ctx):
-    if ctx and ctx.send_emails:
-        return TooLongWorkingWarning(pck, ctx)
+
+def GetLongExecutionWarningHelper(pck):
+    if pck and pck.notify_emails:
+        return TooLongWorkingWarning(pck)
 
 
 class PacketExecutionError(IMessageHelper):
@@ -122,17 +123,18 @@ class EmergencyError(IMessageHelper):
 
 
 class TooLongWorkingWarning(IMessageHelper):
-    def __init__(self, pck, ctx):
+    def __init__(self, pck):
         self.pck = pck
-        self.ctx = ctx
 
     def subject(self):
+        import socket
+        host = socket.gethostname()
         return "[REM@%(sname)s] Task '%(pname)s'(%(pid)s) now working too long" \
-               % {"pname": self.pck.name, "pid": self.pck.id, "sname": self.ctx.network_name}
+               % {"pname": self.pck.name, "pid": self.pck.id, 'sname': host}
 
     def message(self):
         mbuf = cStringIO.StringIO()
-        print >> mbuf, "Packet '%(pname)s' has been marked to delete by EMERGENCY situation" % {"pname": self.pck.name}
+        print >> mbuf, "Packet '%(pname)s' now working too long" % {"pname": self.pck.name}
         print >> mbuf, "Extended packet status:"
         print >> mbuf, "packet id:", self.pck.id
         print >> mbuf, "now working:", self.pck.working_time

@@ -74,7 +74,7 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, notify_timeout=604800):
     if notify_emails is not None:
         assert isinstance(notify_emails, list), "notify_emails must be list or None"
         for email in notify_emails:
@@ -82,7 +82,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     wait_tags = [_scheduler.tagRef.AcquireTag(tagname) for tagname in wait_tagnames]
     pck = JobPacket(packet_name, priority, _context, notify_emails,
                     wait_tags=wait_tags, set_tag=_scheduler.tagRef.AcquireTag(set_tag),
-                    kill_all_jobs_on_error=kill_all_jobs_on_error)
+                    kill_all_jobs_on_error=kill_all_jobs_on_error, notify_timeout=notify_timeout)
     for tag in wait_tags:
         _scheduler.connManager.Subscribe(tag)
     _scheduler.tempStorage.StorePacket(pck)

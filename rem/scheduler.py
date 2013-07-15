@@ -205,8 +205,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.RegisterQueues(qRef)
             #output objects statistics
             ObjectRegistrator_.LogStats()
-            for p in self.packetStorage.box.items():
-                p.start_time = time.time()
 
     def Restore(self):
         self.tagRef.Restore()

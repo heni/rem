@@ -184,12 +184,12 @@ class JobPacket(object):
     """прокси объект для создания пакетов задач REM"""
     DEFAULT_TRIES_COUNT = 5
     
-    def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False, kill_all_jobs_on_error=True):
+    def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False, kill_all_jobs_on_error=True, notify_timeout=604800):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
             raise RuntimeError("result tag %s already set for packet %s" % (set_tag, name))
-        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error)
+        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, notify_timeout)
 
 
     def AddJob(self, shell, parents = [], pipe_parents = [], set_tag = None, tries = DEFAULT_TRIES_COUNT, files = None, \
@@ -526,7 +526,7 @@ class Connector(object):
         """возвращает объект для работы с очередью c именем qname (см. класс Queue)"""
         return Queue(self, qname)
 
-    def Packet(self, pckname, priority = MAX_PRIORITY, notify_emails = [], wait_tags = (), set_tag = None, check_tag_uniqueness=False, kill_all_jobs_on_error=True):
+    def Packet(self, pckname, priority = MAX_PRIORITY, notify_emails = [], wait_tags = (), set_tag = None, check_tag_uniqueness=False, kill_all_jobs_on_error=True, notify_timeout=604800):
         """создает новый пакет с именем pckname
             priority - приоритет выполнения пакета
             notify_emails - список почтовых адресов, для уведомления об ошибках
@@ -534,7 +534,7 @@ class Connector(object):
             set_tag - тэг, устанавливаемый по завершении работы пакеты
             kill_all_jobs_on_error - при неудачном завершении задания остальные задания прекращают работу.
         возвращает объект класса JobPacket"""
-        return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness)
+        return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness, kill_all_jobs_on_error=kill_all_jobs_on_error, notify_timeout=notify_timeout)
 
     def Tag(self, tagname):
         """возвращает объект для работы с тэгом tagname (см. класс Tag)"""

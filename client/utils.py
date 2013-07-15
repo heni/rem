@@ -1,4 +1,4 @@
-from client import remclient
+import remclient
 
 
 def clean_rem(url):

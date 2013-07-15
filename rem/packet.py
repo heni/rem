@@ -62,11 +62,12 @@ class PCL_StateChange(object):
 
 
 class PacketCustomLogic(object):
-    from messages import GetHelperByPacketState, GetEmergencyHelper
+    from messages import GetHelperByPacketState, GetEmergencyHelper, GetLongExecutionWarningHelper
 
     SchedCtx = None
     StateMessageHelper = staticmethod(GetHelperByPacketState)
     EmergencyMessageHelper = staticmethod(GetEmergencyHelper)
+    LongExecutionWorkningHelper = staticmethod(GetLongExecutionWarningHelper)
 
     def __init__(self, pck):
         self.pck = pck
@@ -85,6 +86,12 @@ class PacketCustomLogic(object):
         msgHelper = self.EmergencyMessageHelper(self.pck, self.SchedCtx)
         if msgHelper:
             SendEmail(self.pck.notify_emails, msgHelper)
+
+    def DoLongExecutionWarning(self):
+        logging.warning("Packet %s take too long time", self.pck.name)
+        msgHelper = self.LongExecutionWorkningHelper(self.pck, self.SchedCtx)
+        logging.warning('msgHelper: %s, ', type(msgHelper))
+        SendEmail(self.pck.notify_emails, msgHelper)
 
     @classmethod
     def UpdateContext(cls, context):
@@ -250,6 +257,7 @@ class JobPacketImpl(object):
         return nState, nTimeout, not self.working
 
 
+# job module.
 class JobPacket(Unpickable(lock=PickableRLock.create,
                            jobs=dict,
                            job_done_indicator=dict,
@@ -264,10 +272,14 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                            history=(list, []),
                            notify_emails=(list, []),
                            flags=int,
+                           kill_all_jobs_on_error = (bool, True),
+                           notify_timeout = int,
                            last_update_time = zeroint,
                            working_time = int,
                            _notified = bool
-                ),
+
+
+),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
@@ -289,13 +301,12 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.last_update_time = None
         self.working_time = 0
         self._notified = False
-        self.context = context
 
     def _checkNotificationTime(self):
         if self.working_time >= self.notify_timeout:
             from messages import GetLongExecutionWarningHelper
-            msg_helper = GetLongExecutionWarningHelper(self, self.context)
-            SendEmail(self.notify_emails, msg_helper)
+            msgHelper = GetLongExecutionWarningHelper(self)
+            SendEmail(self.notify_emails, msgHelper)
             self._notified = True
 
     def UpdateWorkingTime(self):
@@ -597,7 +608,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
 
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in
-# job module.
 import job
 
 job.JobPacket = JobPacket
