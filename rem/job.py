@@ -70,12 +70,16 @@ class Job(Unpickable(err=nullobject,
                      results=list,
                      tries=int,
                      pipe_fail=bool,
-                     description=str),
+                     description=str,
+                     notify_timeout=int,
+                     last_update_time=zeroint,
+                     working_time=int,
+                     _notified=bool),
           CallbackHolder):
     ERR_PENALTY_FACTOR = 6
 
     def __init__(self, shell, parents, pipe_parents, packetRef, maxTryCount, limitter, max_err_len=None,
-                 retry_delay=None, pipe_fail=False, description=""):
+                 retry_delay=None, pipe_fail=False, description="", notify_timeout=604800):
         super(Job, self).__init__()
         self.maxTryCount = maxTryCount
         self.limitter = limitter
@@ -87,6 +91,10 @@ class Job(Unpickable(err=nullobject,
         self.retry_delay = retry_delay
         self.pipe_fail = pipe_fail
         self.description = description
+        self.notify_timeout = notify_timeout
+        self.last_update_time = None
+        self.working_time = 0
+        self._notified = False
         if self.limitter:
             self.AddCallbackListener(self.limitter)
         self.packetRef = packetRef
@@ -97,16 +105,35 @@ class Job(Unpickable(err=nullobject,
         buffer.append(fh.read())
 
     @classmethod
-    def __wait_process(cls, process, err_pipe):
+    def __wait_process(cls, instance, process, err_pipe):
         out = []
         stderrReadThread = threading.Thread(target=cls.__read_stream, args=(err_pipe, out))
         stderrReadThread.setDaemon(True)
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
+        POOL_TIME = 10
+        while process.poll() is None:
+            time.sleep(POOL_TIME)
+            instance.UpdateWorkingTime()
         stderrReadThread.join()
-        process.wait()
         return "", out[0]
+
+    def _checkNotificationTime(self):
+        if self.working_time >= self.notify_timeout:
+            from messages import GetLongExecutionWarningHelper
+            msgHelper = packet.PacketCustomLogic(self.packetRef).DoLongExecutionWarning(self)
+            SendEmail(self.packetRef.notify_emails, msgHelper)
+            self._notified = True
+
+    def UpdateWorkingTime(self):
+        if self._notified:
+            return
+        now = time.time()
+        if self.last_update_time:
+            self.working_time += now - self.last_update_time
+            self._checkNotificationTime()
+        self.last_update_time = now
 
     def CanStart(self):
         if self.limitter:
@@ -131,7 +158,7 @@ class Job(Unpickable(err=nullobject,
                                        preexec_fn=os.setpgrp)
             if pids is not None: pids.add(process.pid)
             self.errPipe[1].close()
-            _, err = self.__wait_process(process, self.errPipe[0])
+            _, err = self.__wait_process(self, process, self.errPipe[0])
             result = CommandLineResult(process.poll(), startTime, time.localtime(), err,
                                        getattr(self, "max_err_len", None))
             if pids is not None:

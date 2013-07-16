@@ -87,9 +87,9 @@ class PacketCustomLogic(object):
         if msgHelper:
             SendEmail(self.pck.notify_emails, msgHelper)
 
-    def DoLongExecutionWarning(self):
+    def DoLongExecutionWarning(self, job):
         logging.warning("Packet %s take too long time", self.pck.name)
-        msgHelper = self.LongExecutionWorkningHelper(self.pck, self.SchedCtx)
+        msgHelper = self.LongExecutionWorkningHelper(job, self.SchedCtx)
         logging.warning('msgHelper: %s, ', type(msgHelper))
         SendEmail(self.pck.notify_emails, msgHelper)
 
@@ -272,20 +272,13 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                            history=(list, []),
                            notify_emails=(list, []),
                            flags=int,
-                           kill_all_jobs_on_error = (bool, True),
-                           notify_timeout = int,
-                           last_update_time = zeroint,
-                           working_time = int,
-                           _notified = bool
-
-
-),
+                           kill_all_jobs_on_error = (bool, True)),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
     INCORRECT = -1
 
-    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True, notify_timeout=60 * 60 * 24 * 7):
+    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True):
         super(JobPacket, self).__init__()
         self.name = name
         self.state = PacketState.NONINITIALIZED
@@ -297,26 +290,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.SetWaitingTags(wait_tags)
         self.done_indicator = set_tag
         self.kill_all_jobs_on_error = kill_all_jobs_on_error
-        self.notify_timeout = notify_timeout
-        self.last_update_time = None
-        self.working_time = 0
-        self._notified = False
-
-    def _checkNotificationTime(self):
-        if self.working_time >= self.notify_timeout:
-            from messages import GetLongExecutionWarningHelper
-            msgHelper = GetLongExecutionWarningHelper(self)
-            SendEmail(self.notify_emails, msgHelper)
-            self._notified = True
-
-    def UpdateWorkingTime(self):
-        if self._notified:
-            return
-        now = time.time()
-        if self.last_update_time:
-            self.working_time += now - self.last_update_time
-            self._checkNotificationTime()
-        self.last_update_time = now
 
     def Init(self, context):
         logging.info("packet init: %r %s", self, self.state)
@@ -393,7 +366,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         return True
 
     def OnStart(self, ref):
-        self.UpdateWorkingTime()
         if not hasattr(self, "waitJobs"):
             self.UpdateJobsDependencies()
         if isinstance(ref, Job):
@@ -422,7 +394,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             self.ProcessTagEvent(ref)
 
     def Add(self, shell, parents, pipe_parents, set_tag, tries,
-            max_err_len, retry_delay, pipe_fail, description):
+            max_err_len, retry_delay, pipe_fail, description, notify_timeout):
         if self.state not in (PacketState.CREATED, PacketState.SUSPENDED):
             raise RuntimeError("incorrect state for \"Add\" operation: %s" % self.state)
         with self.lock:
@@ -430,7 +402,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             pipe_parents = list(p.id for p in pipe_parents)
             job = Job(shell, parents, pipe_parents, self, maxTryCount=tries,
                       limitter=None, max_err_len=max_err_len, retry_delay=retry_delay,
-                      pipe_fail=pipe_fail, description=description)
+                      pipe_fail=pipe_fail, description=description, notify_timeout=notify_timeout)
             self.jobs[job.id] = job
             if set_tag:
                 self.job_done_indicator[job.id] = set_tag

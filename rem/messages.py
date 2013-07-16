@@ -23,9 +23,9 @@ def GetEmergencyHelper(pck, ctx):
         return EmergencyError(pck, ctx)
 
 
-def GetLongExecutionWarningHelper(pck):
-    if pck and pck.notify_emails:
-        return TooLongWorkingWarning(pck)
+def GetLongExecutionWarningHelper(job, ctx):
+    if job and job.packetRef.notify_emails:
+        return TooLongWorkingWarning(job, ctx)
 
 
 class PacketExecutionError(IMessageHelper):
@@ -123,21 +123,21 @@ class EmergencyError(IMessageHelper):
 
 
 class TooLongWorkingWarning(IMessageHelper):
-    def __init__(self, pck):
-        self.pck = pck
+    def __init__(self, job, ctx):
+        self.pck = job.packetRef
+        self.job = job
+        self.ctx = ctx
 
     def subject(self):
-        import socket
-        host = socket.gethostname()
-        return "[REM@%(sname)s] Task '%(pname)s'(%(pid)s) now working too long" \
-               % {"pname": self.pck.name, "pid": self.pck.id, 'sname': host}
+        return "[REM@%(sname)s] Task '%(pname)s'(%(pid)s) now working too long, job id: %(jobid)s " \
+               % {"pname": self.pck.name, "pid": self.pck.id, 'sname': self.ctx.network_name, 'jobid': self.job.id}
 
     def message(self):
         mbuf = cStringIO.StringIO()
         print >> mbuf, "Packet '%(pname)s' now working too long" % {"pname": self.pck.name}
         print >> mbuf, "Extended packet status:"
         print >> mbuf, "packet id:", self.pck.id
-        print >> mbuf, "now working:", self.pck.working_time
+        print >> mbuf, "job id:", self.job.id, 'now working', self.job.working_time
         p_state = self.pck.Status()
         print >> mbuf, "\n".join("%s: %s" % (k, v) for k, v in p_state.iteritems() if k not in ("jobs", "history"))
         print >> mbuf, "history:"

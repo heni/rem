@@ -32,15 +32,6 @@ class Queue(Unpickable(pending=PackSet.create,
         self.name = name
 
     def __getstate__(self):
-        with self.lock:
-            for p in self.worked:
-                p.UpdateWorkingTime()
-        with self.lock:
-            for p in self.waited:
-                p.UpdateWorkingTime()
-        with self.lock:
-            for p in self.pending:
-                p.UpdateWorkingTime()
         self.forgetOldItems(self.worked, self.successForgetTm)
         self.forgetOldItems(self.errored, self.errorForgetTm)
         sdict = getattr(super(Queue, self), "__getstate__", lambda: self.__dict__)()
