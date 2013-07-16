@@ -194,8 +194,8 @@ class JobPacketImpl(object):
         if self.directory:
             try:
                 files = os.listdir(self.directory)
-            except:
-                logging.exception("directory %s listing error", self.directory)
+            except Exception, e:
+                logging.exception("directory %s listing error: %s", self.directory, e)
         return files
 
     def GetFile(self, filename):

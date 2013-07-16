@@ -184,8 +184,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 heapsDiff = self.LastHeap.diff(last_heap) if last_heap else self.LastHeap
                 logging.info("memory changes: %s", heapsDiff)
                 logging.debug("GC collecting result %s", gc.collect())
-            except:
-                logging.exception("")
+            except Exception, e:
+                logging.exception("%s", e)
 
     def __reduce__(self):
         return nullobject, ()
@@ -224,8 +224,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                             logging.warning("relocates directory %s to %s", pck.directory, dst_loc)
                             shutil.copytree(pck.directory, dst_loc)
                             pck.directory = dst_loc
-                        except:
-                            logging.exception("relocation FAIL")
+                        except Exception, e:
+                            logging.exception("relocation FAIL : %s", e)
                             dstStorage = None
                 else:
                     if pck.state != PacketState.SUCCESSFULL:
