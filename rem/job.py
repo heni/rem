@@ -172,7 +172,7 @@ class Job(Unpickable(err=nullobject,
                     self.packetRef.changeState(packet.PacketState.ERROR)
                     logging.info("Job`s %s result: TriesExceededResult", self.id)
         except Exception, e:
-            logging.exception("Run job %s exception: %s", self.id, e.message)
+            logging.exception("Run job %s exception: %s", self.id, e)
 
         finally:
             self.CloseStreams()
@@ -196,8 +196,8 @@ class Job(Unpickable(err=nullobject,
                         os.close(stream)
                     else:
                         raise RuntimeError("can't close unknown file object %r" % stream)
-            except:
-                logging.exception("")
+            except Exception, e:
+                logging.exception("%s", e)
 
     def Terminate(self):
         pids = getattr(self, "pids", None)
