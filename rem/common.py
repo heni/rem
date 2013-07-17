@@ -162,7 +162,7 @@ def emptyset(*args):
     return set()
 
 
-def zeroint(*arfs):
+def zeroint(*args):
     return int()
 
 
