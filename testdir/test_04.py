@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import unittest
+import remclient
 from testdir import *
 
 
@@ -73,7 +74,7 @@ class T04(unittest.TestCase):
         tm = time.time()
         tgPrfx = "chain-%.0f" % tm
         strtTag = "chain-start-%.0f" % tm
-        waitings = [strtTag];
+        waitings = [strtTag]
         pckList = []
         logging.info("start long chain adding")
         for idx in xrange(1000):
@@ -81,7 +82,7 @@ class T04(unittest.TestCase):
             pck = self.connector.Packet(pckname, time.time(), wait_tags=waitings, set_tag="%s-%d" % (tgPrfx, idx))
             pck.AddJob("echo .")
             self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
-            waitings = ["%s-%d" % (tgPrfx, idx)];
+            waitings = ["%s-%d" % (tgPrfx, idx)]
             pckList.append(pck)
         self.connector.Tag(strtTag).Set()
         pckInfo = self.connector.PacketInfo(pckList[-1].id)

@@ -113,15 +113,28 @@ class Job(Unpickable(err=nullobject,
         if process.stdin:
             process.stdin.close()
         POOL_TIME = 10
-        while process.poll() is None:
-            time.sleep(POOL_TIME)
-            instance.UpdateWorkingTime()
-        stderrReadThread.join()
+        working_time = instance.working_time
+        last_updated = instance.last_update_time or time.time()
+        working_time += time.time() - last_updated
+        if not instance._notified and instance.packetRef.notify_emails:
+            while process.poll() is None:
+                working_time += time.time() - last_updated
+                last_updated = time.time()
+                if working_time > instance.notify_timeout:
+                    instance.UpdateWorkingTime()
+            stderrReadThread.join()
+        else:
+            stderrReadThread.join()
+            process.wait()
         return "", out[0]
+
+    def __getstate__(self):
+        odict = self.__dict__.copy()                # copy the dict since we change it
+        del odict['last_update_time']              # remove last_update_time entry
+        return odict
 
     def _checkNotificationTime(self):
         if self.working_time >= self.notify_timeout:
-            from messages import GetLongExecutionWarningHelper
             msgHelper = packet.PacketCustomLogic(self.packetRef).DoLongExecutionWarning(self)
             SendEmail(self.packetRef.notify_emails, msgHelper)
             self._notified = True
