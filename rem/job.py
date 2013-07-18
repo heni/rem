@@ -112,7 +112,6 @@ class Job(Unpickable(err=nullobject,
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
-        POOL_TIME = 10
         working_time = instance.working_time
         last_updated = instance.last_update_time or time.time()
         working_time += time.time() - last_updated
