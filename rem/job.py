@@ -129,7 +129,7 @@ class Job(Unpickable(err=nullobject,
         return "", out[0]
 
     def __getstate__(self):
-        odict = self.__dict__.copy()                # copy the dict since we change it
+        odict = getattr(super(Job, self), "__getstate__", lambda: self.__dict__)()          # copy the dict since we change it
         del odict['last_update_time']              # remove last_update_time entry
         return odict
 
