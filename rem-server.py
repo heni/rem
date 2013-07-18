@@ -398,7 +398,7 @@ class RemDaemon(object):
                 try:
                     self.scheduler.RollBackup()
                 except Exception, e:
-                    logging.exception("rem-server\tbackup error : ", e)
+                    logging.exception("rem-server\tbackup error : %s", e)
                 finally:
                     nextBackupTime = time.time() + self.scheduler.backupPeriod
             time.sleep(TIMEOUT)
