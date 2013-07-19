@@ -112,20 +112,20 @@ class Job(Unpickable(err=nullobject,
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
-        POOL_TIME = 10
         working_time = instance.working_time
         last_updated = instance.last_update_time or time.time()
         working_time += time.time() - last_updated
-        if not instance._notified and instance.packetRef.notify_emails:
-            while process.poll() is None:
-                working_time += time.time() - last_updated
-                last_updated = time.time()
-                if working_time > instance.notify_timeout:
-                    instance.UpdateWorkingTime()
+        while process.poll() in None:
+            working_time += time.time() - last_updated
+            if working_time > instance.notify_timeout:
+                instance.UpdateWorkingTime()
+            last_updated = time.time()
+            if working_time > instance.notify_timeout:
+                err = "Job id: %s time limit time limit exceeded"
+                result = CommandLineResult(process.poll(), time.time()-working_time, time.time(),\
+                                               err, getattr(instance, "max_err_len", None))
+                instance._finalize_job_iteration(process, result)
             stderrReadThread.join()
-        else:
-            stderrReadThread.join()
-            process.wait()
         return "", out[0]
 
     def __getstate__(self):
@@ -134,14 +134,14 @@ class Job(Unpickable(err=nullobject,
         return odict
 
     def _checkNotificationTime(self):
+        if self._notified:
+            return
         if self.working_time >= self.notify_timeout:
             msgHelper = packet.PacketCustomLogic(self.packetRef).DoLongExecutionWarning(self)
             SendEmail(self.packetRef.notify_emails, msgHelper)
             self._notified = True
 
     def UpdateWorkingTime(self):
-        if self._notified:
-            return
         now = time.time()
         if self.last_update_time:
             self.working_time += now - self.last_update_time
@@ -153,6 +153,18 @@ class Job(Unpickable(err=nullobject,
             return self.limitter.CanStart()
         return True
 
+    def _finalize_job_iteration(self, process, result):
+        if self.pids is not None:
+            self.pids.remove(process.pid)
+        self.results.append(result)
+        if result.IsFailed() and self.tries >= self.maxTryCount and \
+                        self.packetRef.state in (packet.PacketState.WORKABLE, packet.PacketState.PENDING):
+            self.results.append(TriesExceededResult(self.tries))
+            if self.packetRef.kill_all_jobs_on_error:
+                self.packetRef.UserSuspend(kill_jobs=True)
+                self.packetRef.changeState(packet.PacketState.ERROR)
+                logging.info("Job`s %s result: TriesExceededResult", self.id)
+
     def Run(self, pids=None):
         self.input = self.output = None
         self.errPipe = None
@@ -161,6 +173,7 @@ class Job(Unpickable(err=nullobject,
         self.pids = pids
         try:
             self.tries += 1
+            self.working_time = 0
             self.FireEvent("start")
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
@@ -169,21 +182,12 @@ class Job(Unpickable(err=nullobject,
             process = subprocess.Popen(run_args, stdout=self.output.fileno(), stdin=self.input.fileno(),
                                        stderr=self.errPipe[1].fileno(), close_fds=True, cwd=self.packetRef.directory,
                                        preexec_fn=os.setpgrp)
-            if pids is not None: pids.add(process.pid)
+            if self.pids is not None: self.pids.add(process.pid)
             self.errPipe[1].close()
             _, err = self.__wait_process(self, process, self.errPipe[0])
             result = CommandLineResult(process.poll(), startTime, time.localtime(), err,
                                        getattr(self, "max_err_len", None))
-            if pids is not None:
-                pids.remove(process.pid)
-            self.results.append(result)
-            if result.IsFailed() and self.tries >= self.maxTryCount and \
-                            self.packetRef.state in (packet.PacketState.WORKABLE, packet.PacketState.PENDING):
-                self.results.append(TriesExceededResult(self.tries))
-                if self.packetRef.kill_all_jobs_on_error:
-                    self.packetRef.UserSuspend(kill_jobs=True)
-                    self.packetRef.changeState(packet.PacketState.ERROR)
-                    logging.info("Job`s %s result: TriesExceededResult", self.id)
+            self._finalize_job_iteration(process, result)
         except Exception, e:
             logging.exception("Run job %s exception: %s", self.id, e)
 
