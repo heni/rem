@@ -72,6 +72,7 @@ class Job(Unpickable(err=nullobject,
                      pipe_fail=bool,
                      description=str,
                      notify_timeout=int,
+                     max_working_time=(int, 1209600),
                      last_update_time=zeroint,
                      working_time=int,
                      _notified=bool),
@@ -79,7 +80,7 @@ class Job(Unpickable(err=nullobject,
     ERR_PENALTY_FACTOR = 6
 
     def __init__(self, shell, parents, pipe_parents, packetRef, maxTryCount, limitter, max_err_len=None,
-                 retry_delay=None, pipe_fail=False, description="", notify_timeout=604800):
+                 retry_delay=None, pipe_fail=False, description="", notify_timeout=604800, max_working_time=1209600):
         super(Job, self).__init__()
         self.maxTryCount = maxTryCount
         self.limitter = limitter
@@ -95,6 +96,7 @@ class Job(Unpickable(err=nullobject,
         self.last_update_time = None
         self.working_time = 0
         self._notified = False
+        self.max_working_time = max_working_time
         if self.limitter:
             self.AddCallbackListener(self.limitter)
         self.packetRef = packetRef
@@ -112,20 +114,20 @@ class Job(Unpickable(err=nullobject,
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
-        working_time = instance.working_time
         last_updated = instance.last_update_time or time.time()
-        working_time += time.time() - last_updated
-        while process.poll() in None:
+        working_time = instance.working_time + time.time() - last_updated
+        while process.poll() is None:
             working_time += time.time() - last_updated
             if working_time > instance.notify_timeout:
                 instance.UpdateWorkingTime()
             last_updated = time.time()
-            if working_time > instance.notify_timeout:
-                err = "Job id: %s time limit time limit exceeded"
-                result = CommandLineResult(process.poll(), time.time()-working_time, time.time(),\
-                                               err, getattr(instance, "max_err_len", None))
+            if working_time > instance.max_working_time:
+                err = "Job id: %s time limit exceeded" % instance.id
+                localize = time.localtime
+                process.kill()
+                result = CommandLineResult(process.poll(), localize(time.time() - working_time), localize(time.time()), err, getattr(instance, "max_err_len", None))
                 instance._finalize_job_iteration(process, result)
-            stderrReadThread.join()
+        stderrReadThread.join()
         return "", out[0]
 
     def __getstate__(self):
@@ -154,7 +156,7 @@ class Job(Unpickable(err=nullobject,
         return True
 
     def _finalize_job_iteration(self, process, result):
-        if self.pids is not None:
+        if self.pids is not None and process.pid in self.pids:
             self.pids.remove(process.pid)
         self.results.append(result)
         if result.IsFailed() and self.tries >= self.maxTryCount and \
