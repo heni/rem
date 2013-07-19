@@ -71,8 +71,8 @@ class Job(Unpickable(err=nullobject,
                      tries=int,
                      pipe_fail=bool,
                      description=str,
-                     notify_timeout=int,
                      max_working_time=(int, 1209600),
+                     notify_timeout=(int, 604800),
                      last_update_time=zeroint,
                      working_time=int,
                      _notified=bool),
@@ -114,6 +114,7 @@ class Job(Unpickable(err=nullobject,
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
+
         last_updated = instance.last_update_time or time.time()
         working_time = instance.working_time + time.time() - last_updated
         while process.poll() is None:
