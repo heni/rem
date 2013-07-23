@@ -92,9 +92,6 @@ class Job(Unpickable(err=nullobject,
         self.pipe_fail = pipe_fail
         self.description = description
         self.notify_timeout = notify_timeout
-        self.last_update_time = None
-        self.working_time = 0
-        self._notified = False
         if self.limitter:
             self.AddCallbackListener(self.limitter)
         self.packetRef = packetRef
@@ -104,23 +101,22 @@ class Job(Unpickable(err=nullobject,
     def __read_stream(fh, buffer):
         buffer.append(fh.read())
 
-    @classmethod
-    def __wait_process(cls, instance, process, err_pipe):
+    def __wait_process(self, process, err_pipe):
         out = []
-        stderrReadThread = threading.Thread(target=cls.__read_stream, args=(err_pipe, out))
+        stderrReadThread = threading.Thread(target=Job.__read_stream, args=(err_pipe, out))
         stderrReadThread.setDaemon(True)
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
-        working_time = instance.working_time
-        last_updated = instance.last_update_time or time.time()
+        working_time = self.working_time
+        last_updated = self.last_update_time or time.time()
         working_time += time.time() - last_updated
-        if not instance._notified and instance.packetRef.notify_emails:
+        if not self._notified and self.packetRef.notify_emails:
             while process.poll() is None:
                 working_time += time.time() - last_updated
                 last_updated = time.time()
-                if working_time > instance.notify_timeout:
-                    instance.UpdateWorkingTime()
+                if working_time > self.notify_timeout:
+                    self.UpdateWorkingTime()
             stderrReadThread.join()
         else:
             stderrReadThread.join()
@@ -170,7 +166,7 @@ class Job(Unpickable(err=nullobject,
                                        preexec_fn=os.setpgrp)
             if pids is not None: pids.add(process.pid)
             self.errPipe[1].close()
-            _, err = self.__wait_process(self, process, self.errPipe[0])
+            _, err = self.__wait_process(process, self.errPipe[0])
             result = CommandLineResult(process.poll(), startTime, time.localtime(), err,
                                        getattr(self, "max_err_len", None))
             if pids is not None:
