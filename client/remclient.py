@@ -193,7 +193,7 @@ class JobPacket(object):
 
 
     def AddJob(self, shell, parents = [], pipe_parents = [], set_tag = None, tries = DEFAULT_TRIES_COUNT, files = None, \
-               max_err_len=None, retry_delay=None, pipe_fail=False, description=""):
+               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=604800, max_working_time=1209600):
         """добавляет задачу в пакет
         shell - коммандная строка, которую следует выполнить
         tries - количество попыток выполнения команды (в случае неуспеха команда перазапускается ограниченное число раз) (по умолчанию: 5)
@@ -211,7 +211,7 @@ class JobPacket(object):
             self.AddFiles(files)
         return JobInfo(id = self.proxy.pck_add_job(self.id, shell, parents,
                        pipe_parents, set_tag, tries, max_err_len, retry_delay,
-                       pipe_fail, description))
+                       pipe_fail, description, notify_timeout, max_working_time))
 
     def AddJobsBulk(self, *jobs):
         """быстрое(batch) добавление задач в пакет
@@ -534,7 +534,7 @@ class Connector(object):
             set_tag - тэг, устанавливаемый по завершении работы пакеты
             kill_all_jobs_on_error - при неудачном завершении задания остальные задания прекращают работу.
         возвращает объект класса JobPacket"""
-        return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness)
+        return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness, kill_all_jobs_on_error=kill_all_jobs_on_error)
 
     def Tag(self, tagname):
         """возвращает объект для работы с тэгом tagname (см. класс Tag)"""

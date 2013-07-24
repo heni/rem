@@ -60,8 +60,8 @@ def CreateScheduler(context, canBeClear=False):
                     with open(backupFile, "r") as backupReader:
                         sched.Deserialize(backupReader)
                     return sched
-                except:
-                    logging.exception("can't restore from file \"%s\"", backupFile)
+                except Exception, e:
+                    logging.exception("can't restore from file \"%s\" : %s", backupFile, e)
                     wasRestoreTry = True
     if wasRestoreTry and not canBeClear:
         raise RuntimeError("can't restore from backup")
@@ -74,7 +74,7 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True):
     if notify_emails is not None:
         assert isinstance(notify_emails, list), "notify_emails must be list or None"
         for email in notify_emails:
@@ -92,13 +92,13 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
 
 @traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
-                max_err_len=None, retry_delay=None, pipe_fail=False, description=""):
+                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=604800, max_working_time=1209600):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
         parents = [pck.jobs[int(jid)] for jid in parents]
         pipe_parents = [pck.jobs[int(jid)] for jid in pipe_parents]
         job = pck.Add(shell, parents, pipe_parents, _scheduler.tagRef.AcquireTag(set_tag), tries, \
-                      max_err_len, retry_delay, pipe_fail, description)
+                      max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time)
         return str(job.id)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
@@ -397,8 +397,8 @@ class RemDaemon(object):
             if time.time() > nextBackupTime:
                 try:
                     self.scheduler.RollBackup()
-                except:
-                    logging.exception("rem-server\tbackup error")
+                except Exception, e:
+                    logging.exception("rem-server\tbackup error : %s", e)
                 finally:
                     nextBackupTime = time.time() + self.scheduler.backupPeriod
             time.sleep(TIMEOUT)

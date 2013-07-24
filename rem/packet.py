@@ -62,11 +62,12 @@ class PCL_StateChange(object):
 
 
 class PacketCustomLogic(object):
-    from messages import GetHelperByPacketState, GetEmergencyHelper
+    from messages import GetHelperByPacketState, GetEmergencyHelper, GetLongExecutionWarningHelper
 
     SchedCtx = None
     StateMessageHelper = staticmethod(GetHelperByPacketState)
     EmergencyMessageHelper = staticmethod(GetEmergencyHelper)
+    LongExecutionWorkningHelper = staticmethod(GetLongExecutionWarningHelper)
 
     def __init__(self, pck):
         self.pck = pck
@@ -85,6 +86,12 @@ class PacketCustomLogic(object):
         msgHelper = self.EmergencyMessageHelper(self.pck, self.SchedCtx)
         if msgHelper:
             SendEmail(self.pck.notify_emails, msgHelper)
+
+    def DoLongExecutionWarning(self, job):
+        logging.warning("Packet's '%s' job '%s' execution takes too long time", job.packetRef.name, job.id)
+        msgHelper = self.LongExecutionWorkningHelper(job, self.SchedCtx)
+        logging.warning('msgHelper: %s, ', type(msgHelper))
+        SendEmail(self.pck.notify_emails, msgHelper)
 
     @classmethod
     def UpdateContext(cls, context):
@@ -194,8 +201,8 @@ class JobPacketImpl(object):
         if self.directory:
             try:
                 files = os.listdir(self.directory)
-            except:
-                logging.exception("directory %s listing error", self.directory)
+            except Exception, e:
+                logging.exception("directory %s listing error: %s", self.directory, e)
         return files
 
     def GetFile(self, filename):
@@ -250,6 +257,7 @@ class JobPacketImpl(object):
         return nState, nTimeout, not self.working
 
 
+# job module.
 class JobPacket(Unpickable(lock=PickableRLock.create,
                            jobs=dict,
                            job_done_indicator=dict,
@@ -263,14 +271,15 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                            state=(str, PacketState.CREATED),
                            history=(list, []),
                            notify_emails=(list, []),
-                           flags=int),
+                           flags=int,
+                           kill_all_jobs_on_error = (bool, True)),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
     INCORRECT = -1
 
     def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True):
-        getattr(super(JobPacket, self), "__init__")()
+        super(JobPacket, self).__init__()
         self.name = name
         self.state = PacketState.NONINITIALIZED
         self.Init(context)
@@ -385,7 +394,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             self.ProcessTagEvent(ref)
 
     def Add(self, shell, parents, pipe_parents, set_tag, tries,
-            max_err_len, retry_delay, pipe_fail, description):
+            max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time):
         if self.state not in (PacketState.CREATED, PacketState.SUSPENDED):
             raise RuntimeError("incorrect state for \"Add\" operation: %s" % self.state)
         with self.lock:
@@ -393,7 +402,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             pipe_parents = list(p.id for p in pipe_parents)
             job = Job(shell, parents, pipe_parents, self, maxTryCount=tries,
                       limitter=None, max_err_len=max_err_len, retry_delay=retry_delay,
-                      pipe_fail=pipe_fail, description=description)
+                      pipe_fail=pipe_fail, description=description, notify_timeout=notify_timeout, max_working_time=max_working_time)
             self.jobs[job.id] = job
             if set_tag:
                 self.job_done_indicator[job.id] = set_tag
@@ -571,7 +580,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
 
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in
-# job module.
 import job
 
 job.JobPacket = JobPacket

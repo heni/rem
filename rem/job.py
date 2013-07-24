@@ -70,12 +70,17 @@ class Job(Unpickable(err=nullobject,
                      results=list,
                      tries=int,
                      pipe_fail=bool,
-                     description=str),
+                     description=str,
+                     max_working_time=(int, 1209600),
+                     notify_timeout=(int, 604800),
+                     last_update_time=zeroint,
+                     working_time=int,
+                     _notified=bool),
           CallbackHolder):
     ERR_PENALTY_FACTOR = 6
 
     def __init__(self, shell, parents, pipe_parents, packetRef, maxTryCount, limitter, max_err_len=None,
-                 retry_delay=None, pipe_fail=False, description=""):
+                 retry_delay=None, pipe_fail=False, description="", notify_timeout=604800, max_working_time=1209600):
         super(Job, self).__init__()
         self.maxTryCount = maxTryCount
         self.limitter = limitter
@@ -87,6 +92,8 @@ class Job(Unpickable(err=nullobject,
         self.retry_delay = retry_delay
         self.pipe_fail = pipe_fail
         self.description = description
+        self.notify_timeout = notify_timeout
+        self.max_working_time = max_working_time
         if self.limitter:
             self.AddCallbackListener(self.limitter)
         self.packetRef = packetRef
@@ -96,22 +103,55 @@ class Job(Unpickable(err=nullobject,
     def __read_stream(fh, buffer):
         buffer.append(fh.read())
 
-    @classmethod
-    def __wait_process(cls, process, err_pipe):
+    def __wait_process(self, process, err_pipe):
         out = []
-        stderrReadThread = threading.Thread(target=cls.__read_stream, args=(err_pipe, out))
+        stderrReadThread = threading.Thread(target=Job.__read_stream, args=(err_pipe, out))
         stderrReadThread.setDaemon(True)
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
-        stderrReadThread.join()
-        process.wait()
+        self.last_update_time = self.last_update_time or time.time()
+        self.working_time += time.time() - self.last_update_time
+        if not self._notified and self.packetRef.notify_emails:
+            while process.poll() is None:
+                self.working_time += time.time() - self.last_update_time
+                self.last_updated = time.time()
+                if self.working_time > self.notify_timeout:
+                    self.UpdateWorkingTime()
+                time.sleep(0.001)
+            stderrReadThread.join()
+        else:
+            stderrReadThread.join()
+            process.wait()
         return "", out[0]
+
+    def _checkNotificationTime(self):
+        if self._notified:
+            return
+        if self.working_time >= self.notify_timeout:
+            msgHelper = packet.PacketCustomLogic(self.packetRef).DoLongExecutionWarning(self)
+            SendEmail(self.packetRef.notify_emails, msgHelper)
+            self._notified = True
+
+    def UpdateWorkingTime(self):
+        self._checkNotificationTime()
 
     def CanStart(self):
         if self.limitter:
             return self.limitter.CanStart()
         return True
+
+    def _finalize_job_iteration(self, process, result):
+        if self.pids is not None and process.pid in self.pids:
+            self.pids.remove(process.pid)
+        self.results.append(result)
+        if result.IsFailed() and self.tries >= self.maxTryCount and \
+                        self.packetRef.state in (packet.PacketState.WORKABLE, packet.PacketState.PENDING):
+            self.results.append(TriesExceededResult(self.tries))
+            if self.packetRef.kill_all_jobs_on_error:
+                self.packetRef.UserSuspend(kill_jobs=True)
+                self.packetRef.changeState(packet.PacketState.ERROR)
+                logging.info("Job`s %s result: TriesExceededResult", self.id)
 
     def Run(self, pids=None):
         self.input = self.output = None
@@ -121,6 +161,7 @@ class Job(Unpickable(err=nullobject,
         self.pids = pids
         try:
             self.tries += 1
+            self.working_time = 0
             self.FireEvent("start")
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
@@ -129,23 +170,14 @@ class Job(Unpickable(err=nullobject,
             process = subprocess.Popen(run_args, stdout=self.output.fileno(), stdin=self.input.fileno(),
                                        stderr=self.errPipe[1].fileno(), close_fds=True, cwd=self.packetRef.directory,
                                        preexec_fn=os.setpgrp)
-            if pids is not None: pids.add(process.pid)
+            if self.pids is not None: self.pids.add(process.pid)
             self.errPipe[1].close()
             _, err = self.__wait_process(process, self.errPipe[0])
             result = CommandLineResult(process.poll(), startTime, time.localtime(), err,
                                        getattr(self, "max_err_len", None))
-            if pids is not None:
-                pids.remove(process.pid)
-            self.results.append(result)
-            if result.IsFailed() and self.tries >= self.maxTryCount and \
-                            self.packetRef.state in (packet.PacketState.WORKABLE, packet.PacketState.PENDING):
-                self.results.append(TriesExceededResult(self.tries))
-                if self.packetRef.kill_all_jobs_on_error:
-                    self.packetRef.UserSuspend(kill_jobs=True)
-                    self.packetRef.changeState(packet.PacketState.ERROR)
-                    logging.info("Job`s %s result: TriesExceededResult", self.id)
+            self._finalize_job_iteration(process, result)
         except Exception, e:
-            logging.exception("Run job %s exception: %s", self.id, e.message)
+            logging.exception("Run job %s exception: %s", self.id, e)
 
         finally:
             self.CloseStreams()
@@ -169,8 +201,8 @@ class Job(Unpickable(err=nullobject,
                         os.close(stream)
                     else:
                         raise RuntimeError("can't close unknown file object %r" % stream)
-            except:
-                logging.exception("")
+            except Exception, e:
+                logging.exception("%s", e)
 
     def Terminate(self):
         pids = getattr(self, "pids", None)

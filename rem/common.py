@@ -160,6 +160,10 @@ def emptyset(*args):
     return set()
 
 
+def zeroint(*args):
+    return int()
+
+
 class nullobject(object):
     __instance = None
 
@@ -228,11 +232,11 @@ class TimedSet(PriorityQueue, Unpickable(lock=PickableLock)):
         getattr(super(TimedSet, self), "__init__")()
 
     @classmethod
-    def create(cls, list=[]):
+    def create(cls, list=None):
         if isinstance(list, cls):
             return list
         obj = cls()
-        map(obj.add, list)
+        map(obj.add, list or [])
         return obj
 
     def add(self, obj, tm=None):
@@ -281,11 +285,11 @@ class TimedMap(PriorityQueue):
 def GeneralizedSet(priorAttr):
     class _packset(PriorityQueue):
         @classmethod
-        def create(cls, list=[]):
+        def create(cls, list=None):
             if isinstance(list, cls):
                 return list
             obj = cls()
-            map(obj.add, list)
+            map(obj.add, list or [])
             return obj
 
         def add(self, pck):
