@@ -110,25 +110,20 @@ class Job(Unpickable(err=nullobject,
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
-        working_time = self.working_time
-        last_updated = self.last_update_time or time.time()
-        working_time += time.time() - last_updated
+        self.last_update_time = self.last_update_time or time.time()
+        self.working_time += time.time() - self.last_update_time
         if not self._notified and self.packetRef.notify_emails:
             while process.poll() is None:
-                working_time += time.time() - last_updated
-                last_updated = time.time()
-                if working_time > self.notify_timeout:
+                self.working_time += time.time() - self.last_update_time
+                self.last_updated = time.time()
+                if self.working_time > self.notify_timeout:
                     self.UpdateWorkingTime()
+                time.sleep(0.001)
             stderrReadThread.join()
         else:
             stderrReadThread.join()
             process.wait()
         return "", out[0]
-
-    def __getstate__(self):
-        odict = getattr(super(Job, self), "__getstate__", lambda: self.__dict__)()          # copy the dict since we change it
-        del odict['last_update_time']              # remove last_update_time entry
-        return odict
 
     def _checkNotificationTime(self):
         if self._notified:
@@ -139,11 +134,7 @@ class Job(Unpickable(err=nullobject,
             self._notified = True
 
     def UpdateWorkingTime(self):
-        now = time.time()
-        if self.last_update_time:
-            self.working_time += now - self.last_update_time
-            self._checkNotificationTime()
-        self.last_update_time = now
+        self._checkNotificationTime()
 
     def CanStart(self):
         if self.limitter:

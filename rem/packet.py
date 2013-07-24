@@ -88,7 +88,7 @@ class PacketCustomLogic(object):
             SendEmail(self.pck.notify_emails, msgHelper)
 
     def DoLongExecutionWarning(self, job):
-        logging.warning("Packet %s take too long time", self.pck.name)
+        logging.warning("Packet's '%s' job '%s' execution takes too long time", job.packetRef.name, job.id)
         msgHelper = self.LongExecutionWorkningHelper(job, self.SchedCtx)
         logging.warning('msgHelper: %s, ', type(msgHelper))
         SendEmail(self.pck.notify_emails, msgHelper)

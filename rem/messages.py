@@ -134,10 +134,12 @@ class TooLongWorkingWarning(IMessageHelper):
 
     def message(self):
         mbuf = cStringIO.StringIO()
-        print >> mbuf, "Packet '%(pname)s' now working too long" % {"pname": self.pck.name}
-        print >> mbuf, "Extended packet status:"
+        print >> mbuf, "Packet '%(pname)s' has job working too long" % {"pname": self.pck.name}
         print >> mbuf, "packet id:", self.pck.id
-        print >> mbuf, "job id:", self.job.id, 'now working', self.job.working_time
+        print >> mbuf, "job id:", self.job.id
+        print >> mbuf, "job wait limit:", self.job.notify_timeout
+        print >> mbuf, "job working time:", self.job.working_time, 'sec'
+        print >> mbuf, "Extended packet status:"
         p_state = self.pck.Status()
         print >> mbuf, "\n".join("%s: %s" % (k, v) for k, v in p_state.iteritems() if k not in ("jobs", "history"))
         print >> mbuf, "history:"
