@@ -116,7 +116,7 @@ class Job(Unpickable(err=nullobject,
                 self.last_updated = time.time()
                 if self.working_time > self.notify_timeout:
                     self.UpdateWorkingTime()
-                time.sleep(0.1)
+                time.sleep(0.001)
             stderrReadThread.join()
         else:
             stderrReadThread.join()
@@ -145,6 +145,7 @@ class Job(Unpickable(err=nullobject,
         self.pids = pids
         try:
             self.tries += 1
+            self.working_time = 0
             self.FireEvent("start")
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
