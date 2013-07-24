@@ -60,8 +60,8 @@ def CreateScheduler(context, canBeClear=False):
                     with open(backupFile, "r") as backupReader:
                         sched.Deserialize(backupReader)
                     return sched
-                except Exception, e:
-                    logging.exception("can't restore from file \"%s\" : %s", backupFile, e.message)
+                except:
+                    logging.exception("can't restore from file \"%s\"", backupFile)
                     wasRestoreTry = True
     if wasRestoreTry and not canBeClear:
         raise RuntimeError("can't restore from backup")
@@ -397,8 +397,8 @@ class RemDaemon(object):
             if time.time() > nextBackupTime:
                 try:
                     self.scheduler.RollBackup()
-                except Exception, e:
-                    logging.exception("rem-server\tbackup error : ", e.message)
+                except:
+                    logging.exception("rem-server\tbackup error")
                 finally:
                     nextBackupTime = time.time() + self.scheduler.backupPeriod
             time.sleep(TIMEOUT)
@@ -465,7 +465,6 @@ def scheduler_test():
     print_tags(_scheduler)
     qname = "userdata"
     print list_queues()
-    pendingLength = workedLength = suspendLength = 0
     if qname in _scheduler.qRef:
         pendingLength = len(_scheduler.qRef[qname].pending)
         workedLength = len(_scheduler.qRef[qname].worked)

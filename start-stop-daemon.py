@@ -152,7 +152,6 @@ class Service(object):
                         sys.exit(0)
                 sys.exit(1)
         try:
-            status = 0
             while time.time() - stTime <= timeout:
                 wres = waitpid_ex(pid, os.WNOHANG)
                 if wres.pid == pid:
@@ -237,7 +236,7 @@ class REMService(Service):
 
 
 def dispatch_work(service, opt, args):
-    if opt.mode in ("status", ):
+    if opt.mode in ("status"):
         pid = service.CheckProcess()
         if pid:
             print "%s is running as pid %s." % (service.name, pid)

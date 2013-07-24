@@ -49,11 +49,9 @@ def traced_rpc_method(level="debug"):
 
 
 class FakeObjectRegistrator(object):
-    def register(self, obj, sdict):
-        pass
+    def register(self, obj, sdict): pass
 
-    def LogStats(self):
-        pass
+    def LogStats(self): pass
 
 
 class ObjectRegistrator(object):
@@ -227,11 +225,10 @@ NullObject = nullobject
 
 class TimedSet(PriorityQueue, Unpickable(lock=PickableLock)):
     def __init__(self):
-        super(TimedSet, self).__init__()
+        getattr(super(TimedSet, self), "__init__")()
 
     @classmethod
-    def create(cls, list=None):
-        if not list: list = []
+    def create(cls, list=[]):
         if isinstance(list, cls):
             return list
         obj = cls()
@@ -265,8 +262,7 @@ class TimedSet(PriorityQueue, Unpickable(lock=PickableLock)):
 
 class TimedMap(PriorityQueue):
     @classmethod
-    def create(cls, dct=None):
-        if not dct: dct = {}
+    def create(cls, dct={}):
         if isinstance(dct, cls):
             return dct
         obj = cls()
@@ -285,8 +281,7 @@ class TimedMap(PriorityQueue):
 def GeneralizedSet(priorAttr):
     class _packset(PriorityQueue):
         @classmethod
-        def create(cls, list=None):
-            if not list: list = []
+        def create(cls, list=[]):
             if isinstance(list, cls):
                 return list
             obj = cls()

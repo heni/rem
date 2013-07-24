@@ -25,8 +25,8 @@ class KillableWorker(threading.Thread):
         while not self.IsKilled():
             try:
                 self.do()
-            except Exception, e:
-                logging.exception("worker\tjob execution error %s", e.message)
+            except:
+                logging.exception("worker\tjob execution error")
             time.sleep(self.tickTime)
 
     def IsKilled(self):
