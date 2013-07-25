@@ -3,6 +3,7 @@ import time
 import optparse
 import remclient
 
+
 def parse_args():
     parser = optparse.OptionParser("""%prog [options] action
 possible actions:
@@ -31,6 +32,7 @@ possible actions:
         parser.error("")
     return opt, args
 
+
 class ICommander(object):
     def __init__(self, opt, args):
         self.type = args[0]
@@ -57,6 +59,7 @@ def print_pck_info(pck, extended=False):
 
 class CommandExecutionError(Exception): pass
 
+
 class ListCommander(ICommander):
     def __call__(self):
         if self.options.queue:
@@ -75,6 +78,7 @@ class ListCommander(ICommander):
             for q, q_stat in self.conn.ListObjects("queues", self.options.name, self.options.prefix):
                 print "queue '%s':\t\t%r" % (q, q_stat)
 
+
 class TagManipCommander(ICommander):
     def __call__(self):
         tagname = self.options.tag
@@ -83,6 +87,7 @@ class TagManipCommander(ICommander):
             tag.Set()
         elif self.type == "unset":
             tag.Unset()
+
 
 class LifeCommander(ICommander):
     def __call__(self):
@@ -112,6 +117,7 @@ class LifeCommander(ICommander):
         else:
             raise CommandExecutionError("unknown command: %s" % self.type)
 
+
 class StatusCommander(ICommander):
     def __call__(self):
         if self.options.queue:
@@ -123,6 +129,7 @@ class StatusCommander(ICommander):
         if self.options.tag:
             tag = self.conn.Tag(self.options.tag)
             print "tag %s value: %s" % (tag.name, tag.Check())
+
 
 class UpdateCommander(ICommander):
     def __call__(self):
@@ -136,6 +143,7 @@ class UpdateCommander(ICommander):
             queue.ChangeWorkingLimit(self.options.working_limit)
         else:
             raise CommandExecutionError("not enough parameters for update command")
+
 
 class MoveCommander(ICommander):
     def __call__(self):
