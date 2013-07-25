@@ -111,19 +111,19 @@ class Job(Unpickable(err=nullobject,
         if process.stdin:
             process.stdin.close()
         self.last_update_time = self.last_update_time or time.time()
-        self.working_time += time.time() - self.last_update_time
+        self.working_time += time.time() - self.last_update_time_time
         while process.poll() is None:
-            self.working_time += time.time() - self.last_updated
+            self.working_time += time.time() - self.last_update_time
+            self.last_update_time = time.time()
             if self.working_time > self.notify_timeout:
                 self.UpdateWorkingTime()
-            self.last_updated = time.time()
             if self.working_time > self.max_working_time:
                 err = "Job id: %s time limit exceeded" % self.id
                 localize = time.localtime
                 process.kill()
                 result = CommandLineResult(process.poll(), localize(time.time() - self.working_time), localize(time.time()), err, getattr(self, "max_err_len", None))
                 self._finalize_job_iteration(process, result)
-                time.sleep(0.001)
+            time.sleep(0.001)
         stderrReadThread.join()
         return "", out[0]
 
