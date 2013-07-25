@@ -113,7 +113,7 @@ class Job(Unpickable(err=nullobject,
         if not self._notified and self.packetRef.notify_emails:
             while process.poll() is None:
                 self.working_time += time.time() - self.last_update_time
-                self.last_updated = time.time()
+                self.last_update_time = time.time()
                 if self.working_time > self.notify_timeout:
                     self.UpdateWorkingTime()
                 time.sleep(0.001)
