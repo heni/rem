@@ -111,7 +111,7 @@ class Job(Unpickable(err=nullobject,
         if process.stdin:
             process.stdin.close()
         self.last_update_time = self.last_update_time or time.time()
-        self.working_time += time.time() - self.last_update_time_time
+        self.working_time += time.time() - self.last_update_time
         while process.poll() is None:
             self.working_time += time.time() - self.last_update_time
             self.last_update_time = time.time()
