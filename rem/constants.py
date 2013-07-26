@@ -1,0 +1,2 @@
+#for Job class
+NOTIFICATION_TIMEOUT = 604800

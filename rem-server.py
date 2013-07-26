@@ -16,6 +16,7 @@ import Queue as StdQueue
 from rem import *
 
 
+
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     def __init__(self, poolsize, *args, **kws):
         SimpleXMLRPCServer.__init__(self, *args, **kws)
@@ -74,7 +75,7 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True):
     if notify_emails is not None:
         assert isinstance(notify_emails, list), "notify_emails must be list or None"
         for email in notify_emails:
@@ -92,13 +93,13 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
 
 @traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
-                max_err_len=None, retry_delay=None, pipe_fail=False, description=""):
+                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
         parents = [pck.jobs[int(jid)] for jid in parents]
         pipe_parents = [pck.jobs[int(jid)] for jid in pipe_parents]
         job = pck.Add(shell, parents, pipe_parents, _scheduler.tagRef.AcquireTag(set_tag), tries, \
-                      max_err_len, retry_delay, pipe_fail, description)
+                      max_err_len, retry_delay, pipe_fail, description, notify_timeout)
         return str(job.id)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
@@ -398,7 +399,7 @@ class RemDaemon(object):
                 try:
                     self.scheduler.RollBackup()
                 except Exception, e:
-                    logging.exception("rem-server\tbackup error : ", e)
+                    logging.exception("rem-server\tbackup error : %s", e)
                 finally:
                     nextBackupTime = time.time() + self.scheduler.backupPeriod
             time.sleep(TIMEOUT)
