@@ -16,6 +16,7 @@ import Queue as StdQueue
 from rem import *
 
 
+
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     def __init__(self, poolsize, *args, **kws):
         SimpleXMLRPCServer.__init__(self, *args, **kws)
@@ -92,7 +93,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
 
 @traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
-                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=604800):
+                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
         parents = [pck.jobs[int(jid)] for jid in parents]
