@@ -1,6 +1,5 @@
 import cStringIO
 import time
-
 from packet import PacketState, PacketFlag
 
 
@@ -22,6 +21,11 @@ def GetHelperByPacketState(pck, ctx):
 def GetEmergencyHelper(pck, ctx):
     if ctx and ctx.send_emails:
         return EmergencyError(pck, ctx)
+
+
+def GetLongExecutionWarningHelper(job, ctx):
+    if job and job.packetRef.notify_emails:
+        return TooLongWorkingWarning(job, ctx)
 
 
 class PacketExecutionError(IMessageHelper):
@@ -105,6 +109,37 @@ class EmergencyError(IMessageHelper):
         print >> mbuf, "Packet '%(pname)s' has been marked to delete by EMERGENCY situation" % {"pname": self.pck.name}
         print >> mbuf, "Extended packet status:"
         print >> mbuf, "packet id:", self.pck.id
+        p_state = self.pck.Status()
+        print >> mbuf, "\n".join("%s: %s" % (k, v) for k, v in p_state.iteritems() if k not in ("jobs", "history"))
+        print >> mbuf, "history:"
+        for state, timestamp in p_state.get("history", []):
+            print >> mbuf, "\t%s: %s" % (time.ctime(timestamp), state)
+        for job in p_state.get("jobs", []):
+            print >> mbuf, "--== subjob info ==--"
+            print >> mbuf, "\n".join("\t%s: %s" % (k, v) for k, v in job.iteritems() if k != "results")
+            if job.get("results"):
+                print >> mbuf, "\n".join("\tresult: %s" % v for v in job.get("results"))
+        return mbuf.getvalue()
+
+
+class TooLongWorkingWarning(IMessageHelper):
+    def __init__(self, job, ctx):
+        self.pck = job.packetRef
+        self.job = job
+        self.ctx = ctx
+
+    def subject(self):
+        return "[REM@%(sname)s] Task '%(pname)s'(%(pid)s) now working too long, job id: %(jobid)s " \
+               % {"pname": self.pck.name, "pid": self.pck.id, 'sname': self.ctx.network_name, 'jobid': self.job.id}
+
+    def message(self):
+        mbuf = cStringIO.StringIO()
+        print >> mbuf, "Packet '%(pname)s' has job working too long" % {"pname": self.pck.name}
+        print >> mbuf, "packet id:", self.pck.id
+        print >> mbuf, "job id:", self.job.id
+        print >> mbuf, "job wait limit:", self.job.notify_timeout
+        print >> mbuf, "job working time:", self.job.working_time, 'sec'
+        print >> mbuf, "Extended packet status:"
         p_state = self.pck.Status()
         print >> mbuf, "\n".join("%s: %s" % (k, v) for k, v in p_state.iteritems() if k not in ("jobs", "history"))
         print >> mbuf, "history:"

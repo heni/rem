@@ -44,12 +44,11 @@ class ConfigReader(ConfigParser):
             return default
 
     def safe_getlist(self, section, option, default=None):
-        if not default: default = []
         try:
             value = self.get(section, option)
             return [item.strip() for item in value.split(",") if item.strip()]
         except NoOptionError:
-            return default
+            return default or []
 
 
 class Context(object):

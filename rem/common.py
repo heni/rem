@@ -162,6 +162,10 @@ def emptyset(*args):
     return set()
 
 
+def zeroint(*args):
+    return int()
+
+
 class nullobject(object):
     __instance = None
 

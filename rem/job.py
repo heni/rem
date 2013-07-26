@@ -8,6 +8,7 @@ import threading
 from callbacks import *
 import osspec
 import packet
+import constants
 
 
 def cut_message(msg, BEG_LEN=None, FIN_LEN=None):
@@ -70,12 +71,16 @@ class Job(Unpickable(err=nullobject,
                      results=list,
                      tries=int,
                      pipe_fail=bool,
-                     description=str),
+                     description=str,
+                     notify_timeout=(int, constants.NOTIFICATION_TIMEOUT),
+                     last_update_time=zeroint,
+                     working_time=int,
+                     _notified=bool),
           CallbackHolder):
     ERR_PENALTY_FACTOR = 6
 
     def __init__(self, shell, parents, pipe_parents, packetRef, maxTryCount, limitter, max_err_len=None,
-                 retry_delay=None, pipe_fail=False, description=""):
+                 retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT):
         super(Job, self).__init__()
         self.maxTryCount = maxTryCount
         self.limitter = limitter
@@ -87,6 +92,7 @@ class Job(Unpickable(err=nullobject,
         self.retry_delay = retry_delay
         self.pipe_fail = pipe_fail
         self.description = description
+        self.notify_timeout = notify_timeout
         if self.limitter:
             self.AddCallbackListener(self.limitter)
         self.packetRef = packetRef
@@ -96,17 +102,32 @@ class Job(Unpickable(err=nullobject,
     def __read_stream(fh, buffer):
         buffer.append(fh.read())
 
-    @classmethod
-    def __wait_process(cls, process, err_pipe):
+    def __wait_process(self, process, err_pipe):
         out = []
-        stderrReadThread = threading.Thread(target=cls.__read_stream, args=(err_pipe, out))
+        stderrReadThread = threading.Thread(target=Job.__read_stream, args=(err_pipe, out))
         stderrReadThread.setDaemon(True)
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
-        stderrReadThread.join()
-        process.wait()
+        self.last_update_time = self.last_update_time or time.time()
+        self.working_time += time.time() - self.last_update_time
+        if not self._notified and self.packetRef.notify_emails:
+            while process.poll() is None:
+                self.working_time += time.time() - self.last_update_time
+                self.last_update_time = time.time()
+                if self.working_time > self.notify_timeout:
+                    self._timeoutNotify()
+                time.sleep(0.001)
+            stderrReadThread.join()
+        else:
+            stderrReadThread.join()
+            process.wait()
         return "", out[0]
+
+    def _timeoutNotify(self):
+        msgHelper = packet.PacketCustomLogic(self.packetRef).DoLongExecutionWarning(self)
+        SendEmail(self.packetRef.notify_emails, msgHelper)
+        self._notified = True
 
     def CanStart(self):
         if self.limitter:
@@ -121,6 +142,7 @@ class Job(Unpickable(err=nullobject,
         self.pids = pids
         try:
             self.tries += 1
+            self.working_time = 0
             self.FireEvent("start")
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
