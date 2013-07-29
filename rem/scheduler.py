@@ -67,6 +67,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                            #storage with knowledge about nonassigned packets (packets that was created but not yet assigned to appropriate queue)
                            schedWatcher=SchedWatcher, #watcher for time scheduled events
                            connManager=ConnectionManager, #connections to others rems
+                           packetNames=emptyset, #set of packet`s names
                         ),
                 ICallbackAcceptor):
     BackupFilenameMatchRe = re.compile("sched-\d*.dump$")
@@ -205,6 +206,10 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.RegisterQueues(qRef)
             #output objects statistics
             ObjectRegistrator_.LogStats()
+            for packet_id in self.packStorage.keys():
+                name = self.packStorage[packet_id].name
+                self.packetNames.add(name)
+            import pdb;pdb.set_trace()
 
     def Restore(self):
         self.tagRef.Restore()

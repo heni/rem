@@ -25,6 +25,18 @@ class GlobalPacketStorage(object):
     def update(self, list):
         map(self.add, list)
 
+    def __getitem__(self, item):
+        if item in self.box.keys():
+            return self.box[item]
+        else:
+            raise KeyError
+
+    def __setitem__(self, key, value):
+        self.box[key] = value
+
+    def keys(self):
+        return self.box.keys()
+
     Add = add
 
     def GetPacket(self, id):
