@@ -8,6 +8,7 @@ import threading
 from callbacks import *
 import osspec
 import packet
+import constants
 
 
 def cut_message(msg, BEG_LEN=None, FIN_LEN=None):
@@ -72,7 +73,7 @@ class Job(Unpickable(err=nullobject,
                      pipe_fail=bool,
                      description=str,
                      max_working_time=(int, 1209600),
-                     notify_timeout=(int, 604800),
+                     notify_timeout=(int, constants.NOTIFICATION_TIMEOUT),
                      last_update_time=zeroint,
                      working_time=int,
                      _notified=bool),
@@ -80,7 +81,7 @@ class Job(Unpickable(err=nullobject,
     ERR_PENALTY_FACTOR = 6
 
     def __init__(self, shell, parents, pipe_parents, packetRef, maxTryCount, limitter, max_err_len=None,
-                 retry_delay=None, pipe_fail=False, description="", notify_timeout=604800, max_working_time=1209600):
+                 retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=1209600):
         super(Job, self).__init__()
         self.maxTryCount = maxTryCount
         self.limitter = limitter
@@ -127,16 +128,10 @@ class Job(Unpickable(err=nullobject,
         stderrReadThread.join()
         return "", out[0]
 
-    def _checkNotificationTime(self):
-        if self._notified:
-            return
-        if self.working_time >= self.notify_timeout:
-            msgHelper = packet.PacketCustomLogic(self.packetRef).DoLongExecutionWarning(self)
-            SendEmail(self.packetRef.notify_emails, msgHelper)
-            self._notified = True
-
-    def UpdateWorkingTime(self):
-        self._checkNotificationTime()
+    def _timeoutNotify(self):
+        msgHelper = packet.PacketCustomLogic(self.packetRef).DoLongExecutionWarning(self)
+        SendEmail(self.packetRef.notify_emails, msgHelper)
+        self._notified = True
 
     def CanStart(self):
         if self.limitter:
