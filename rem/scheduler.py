@@ -209,7 +209,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             for packet_id in self.packStorage.keys():
                 name = self.packStorage[packet_id].name
                 self.packetNames.add(name)
-            import pdb;pdb.set_trace()
+            #import pdb;pdb.set_trace()
 
     def Restore(self):
         self.tagRef.Restore()
