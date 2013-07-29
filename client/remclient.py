@@ -192,7 +192,7 @@ class JobPacket(object):
             raise RuntimeError("result tag %s already set for packet %s" % (set_tag, name))
         self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error)
 
-    def AddJob(self, shell, parents=[], pipe_parents=[], set_tag=None, tries=DEFAULT_TRIES_COUNT, files=None, \
+    def AddJob(self, shell, parents=None, pipe_parents=None, set_tag=None, tries=DEFAULT_TRIES_COUNT, files=None, \
                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=604800,
                max_working_time=1209600):
         """добавляет задачу в пакет
@@ -206,8 +206,8 @@ class JobPacket(object):
         files - список файлов, которые нужно положить в рабочую директорию задания (рабочая директория у всех заданий внутри одного пакета одна и та же)
                можно вместо списка указать dictionary, в этом случае значение словаря будет указывать на путь до файла, а ключ на имя, с которым этот файл следует положить 
                в рабочий каталог задания (реально в рабочем каталоге создаются symlink'и на файлы, располагающиеся в одной общей директории, куда копируются все бинарники)"""
-        parents = [job.id for job in parents]
-        pipe_parents = [job.id for job in pipe_parents]
+        parents = [job.id for job in parents or []]
+        pipe_parents = [job.id for job in pipe_parents or []]
         if files is not None:
             self.AddFiles(files)
         return JobInfo(id=self.proxy.pck_add_job(self.id, shell, parents,
