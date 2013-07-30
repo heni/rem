@@ -16,6 +16,11 @@ import Queue as StdQueue
 from rem import *
 
 
+class DublicatePackageNameException(Exception):
+    def __init__(self, pck_name, serv_name, *args, **kwargs):
+        super(DublicatePackageNameException, self).__init__(*args, **kwargs)
+        self.message = 'Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
+
 
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     def __init__(self, poolsize, *args, **kws):
@@ -75,7 +80,10 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUBLICATE_POLICY):
+    if packet_name_policy & (constants.DUBLICATE_EXCEPTION | constants.DUBLICATE_WARNING):
+        raise DublicatePackageNameException(packet_name, _context.network_name)
+
     if notify_emails is not None:
         assert isinstance(notify_emails, list), "notify_emails must be list or None"
         for email in notify_emails:
@@ -93,7 +101,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
 
 @traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
-                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time = constants.KILL_JOB_DEFAULT_TIMEOUT):
+                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
         parents = [pck.jobs[int(jid)] for jid in parents]

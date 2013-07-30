@@ -96,9 +96,16 @@ import socket
 import sys
 import itertools
 import warnings
+from client import constants
 
 __all__ = ["AdminConnector", "Connector"]
 MAX_PRIORITY = 2 ** 31 - 1
+
+
+class DublicatePackageNameException(Exception):
+    def __init__(self, pck_name, serv_name, *args, **kwargs):
+        super(DublicatePackageNameException, self).__init__(*args, **kwargs)
+        self.message = 'Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
 
 
 def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
@@ -185,16 +192,16 @@ class JobPacket(object):
     DEFAULT_TRIES_COUNT = 5
 
     def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False,
-                 kill_all_jobs_on_error=True):
+                 kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUBLICATE_POLICY):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
             raise RuntimeError("result tag %s already set for packet %s" % (set_tag, name))
-        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error)
+        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, packet_name_policy)
 
     def AddJob(self, shell, parents=None, pipe_parents=None, set_tag=None, tries=DEFAULT_TRIES_COUNT, files=None, \
-               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=604800,
-               max_working_time=1209600):
+               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT,
+               max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT):
         """добавляет задачу в пакет
         shell - коммандная строка, которую следует выполнить
         tries - количество попыток выполнения команды (в случае неуспеха команда перазапускается ограниченное число раз) (по умолчанию: 5)
@@ -521,12 +528,13 @@ class TagsBulk(object):
 class Connector(object):
     """объект коннектор, для работы с REM"""
 
-    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None):
+    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=constants.DEFAULT_DUBLICATE_POLICY):
         """конструктор коннектора
         принимает один параметр - url REM сервера"""
         self.proxy = RetriableXMLRPCProxy(url, tries=conn_retries, verbose=verbose, allow_none=True)
         self.verbose = verbose
         self.checksumDbPath = checksumDbPath
+        self.packet_name_policy=packet_name_policy
 
     def Queue(self, qname):
         """возвращает объект для работы с очередью c именем qname (см. класс Queue)"""
@@ -541,8 +549,16 @@ class Connector(object):
             set_tag - тэг, устанавливаемый по завершении работы пакеты
             kill_all_jobs_on_error - при неудачном завершении задания остальные задания прекращают работу.
         возвращает объект класса JobPacket"""
-        return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness,
-                         kill_all_jobs_on_error=kill_all_jobs_on_error)
+        try:
+            return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness,
+                             kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
+        except DublicatePackageNameException, e:
+            if self.packet_name_policy & constants.DUBLICATE_WARNING:
+                print >> sys.stderr, e.message
+            else:
+                raise
+        except Exception:
+            raise
 
     def Tag(self, tagname):
         """возвращает объект для работы с тэгом tagname (см. класс Tag)"""
@@ -647,6 +663,7 @@ class _RetriableMethod:
 
 
 class AuthTransport(xmlrpclib.Transport):
+
     def send_content(self, connection, request_body):
         connection.putheader("X-Username", getpass.getuser())
         connection.putheader("Content-Type", "text/xml")
@@ -660,7 +677,6 @@ class RetriableXMLRPCProxy(xmlrpclib.ServerProxy):
     def __init__(self, uri, tries, **kws):
         self.__maxTries = tries
         self.__verbose = kws.pop("verbose")
-        kws["transport"] = AuthTransport()
         xmlrpclib.ServerProxy.__init__(self, uri, **kws)
 
     def __getattr__(self, name):
