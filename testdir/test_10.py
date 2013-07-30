@@ -58,10 +58,10 @@ class T10(unittest.TestCase):
         tag2 = "%s2" % tag
         pck = self.connector1.Packet("pck-%.0f" % time.time(), set_tag=tag1)
         self.connector1.Queue(TestingQueue.Get()).AddPacket(pck)
-
+        time.sleep(0.001)
         pck2 = self.connector2.Packet("pck-%.0f" % time.time(), set_tag=tag2, wait_tags=[remote_tag1])
         self.connector2.Queue(TestingQueue.Get()).AddPacket(pck2)
-
+        time.sleep(0.001)
         pck3 = self.connector1.Packet("pck-%.0f" % time.time(), wait_tags=[remote_tag2])
         self.connector1.Queue(TestingQueue.Get()).AddPacket(pck3)
 
@@ -83,10 +83,10 @@ class T10(unittest.TestCase):
 
             pck1 = self.connector1.Packet("pck1-%d-%.0f" % (i, time.time()), set_tag=tag1)
             self.connector1.Queue(TestingQueue.Get()).AddPacket(pck1)
-
+            time.sleep(0.001)
             pck2 = self.connector2.Packet("pck2-%d-%.0f" % (i, time.time()), set_tag=tag2, wait_tags=[remote_tag1])
             self.connector2.Queue(TestingQueue.Get()).AddPacket(pck2)
-
+            time.sleep(0.001)
         pckMany = self.connector1.Packet("pckMany-%.0f" % time.time(), wait_tags=remote_tags)
         self.connector1.Queue(TestingQueue.Get()).AddPacket(pckMany)
 
@@ -110,13 +110,13 @@ class T10(unittest.TestCase):
 
         pck = self.connector1.Packet("pck-%.0f" % time.time(), set_tag=tag1)
         self.connector1.Queue(TestingQueue.Get()).AddPacket(pck)
-
+        time.sleep(0.001)
         pck = self.connector1.Packet("pck-%.0f" % time.time(), set_tag=tag2)
         self.connector1.Queue(TestingQueue.Get()).AddPacket(pck)
-
+        time.sleep(0.001)
         pck1 = self.connector2.Packet("pck1-%.0f" % time.time(), wait_tags=[remote_tag1])
         self.connector2.Queue(TestingQueue.Get()).AddPacket(pck1)
-
+        time.sleep(0.001)
         pck2 = self.connector2.Packet("pck3-%.0f" % time.time(), wait_tags=[remote_tag2])
         self.connector2.Queue(TestingQueue.Get()).AddPacket(pck2)
 

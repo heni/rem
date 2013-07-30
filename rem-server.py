@@ -19,7 +19,7 @@ from rem import *
 class DublicatePackageNameException(Exception):
     def __init__(self, pck_name, serv_name, *args, **kwargs):
         super(DublicatePackageNameException, self).__init__(*args, **kwargs)
-        self.message = 'Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
+        self.message = 'DublicatePackageNameException: Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
 
 
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
@@ -81,8 +81,9 @@ def readonly_method(func):
 
 @traced_rpc_method("info")
 def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUBLICATE_POLICY):
-    if packet_name_policy & (constants.DUBLICATE_EXCEPTION | constants.DUBLICATE_WARNING):
-        raise DublicatePackageNameException(packet_name, _context.network_name)
+    if packet_name_policy & (constants.DUBLICATE_EXCEPTION | constants.DUBLICATE_WARNING) and packet_name in _scheduler.packetNames:
+        ex = DublicatePackageNameException(packet_name, _context.network_name)
+        raise xmlrpclib.Fault(1, ex.message)
 
     if notify_emails is not None:
         assert isinstance(notify_emails, list), "notify_emails must be list or None"
@@ -92,6 +93,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     pck = JobPacket(packet_name, priority, _context, notify_emails,
                     wait_tags=wait_tags, set_tag=_scheduler.tagRef.AcquireTag(set_tag),
                     kill_all_jobs_on_error=kill_all_jobs_on_error)
+    _scheduler.packetNames.add(packet_name)
     for tag in wait_tags:
         _scheduler.connManager.Subscribe(tag)
     _scheduler.tempStorage.StorePacket(pck)
@@ -250,6 +252,8 @@ def pck_delete(pck_id):
     if pck is not None:
         if not pck.canChangeState(PacketState.HISTORIED):
             raise AssertionError("couldn't delete packet '%s' stated as '%s'" % (pck_id, pck.state))
+        if pck.name in _scheduler.packetNames:
+            _scheduler.packetNames.remove(pck.name)
         return pck.changeState(PacketState.HISTORIED)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 

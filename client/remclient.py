@@ -96,16 +96,10 @@ import socket
 import sys
 import itertools
 import warnings
-from client import constants
+from constants import *
 
 __all__ = ["AdminConnector", "Connector"]
 MAX_PRIORITY = 2 ** 31 - 1
-
-
-class DublicatePackageNameException(Exception):
-    def __init__(self, pck_name, serv_name, *args, **kwargs):
-        super(DublicatePackageNameException, self).__init__(*args, **kwargs)
-        self.message = 'Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
 
 
 def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
@@ -192,7 +186,7 @@ class JobPacket(object):
     DEFAULT_TRIES_COUNT = 5
 
     def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False,
-                 kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUBLICATE_POLICY):
+                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_DUBLICATE_POLICY):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
@@ -200,8 +194,8 @@ class JobPacket(object):
         self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, packet_name_policy)
 
     def AddJob(self, shell, parents=None, pipe_parents=None, set_tag=None, tries=DEFAULT_TRIES_COUNT, files=None, \
-               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT,
-               max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT):
+               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=NOTIFICATION_TIMEOUT,
+               max_working_time=KILL_JOB_DEFAULT_TIMEOUT):
         """добавляет задачу в пакет
         shell - коммандная строка, которую следует выполнить
         tries - количество попыток выполнения команды (в случае неуспеха команда перазапускается ограниченное число раз) (по умолчанию: 5)
@@ -528,7 +522,7 @@ class TagsBulk(object):
 class Connector(object):
     """объект коннектор, для работы с REM"""
 
-    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=constants.DEFAULT_DUBLICATE_POLICY):
+    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=DEFAULT_DUBLICATE_POLICY):
         """конструктор коннектора
         принимает один параметр - url REM сервера"""
         self.proxy = RetriableXMLRPCProxy(url, tries=conn_retries, verbose=verbose, allow_none=True)
@@ -552,13 +546,14 @@ class Connector(object):
         try:
             return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness,
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
-        except DublicatePackageNameException, e:
-            if self.packet_name_policy & constants.DUBLICATE_WARNING:
-                print >> sys.stderr, e.message
+        except xmlrpclib.Fault, e:
+            if self.packet_name_policy & DUBLICATE_WARNING and 'DublicatePackageNameException:' in e.faultString:
+                print >> sys.stderr, 'WARNING: %s ' % e.faultString
+                #raise RuntimeWarning(e.faultString)
             else:
-                raise
-        except Exception:
-            raise
+                raise RuntimeError(e.faultString)
+        except Exception, e:
+            raise RuntimeError(e.faultString)
 
     def Tag(self, tagname):
         """возвращает объект для работы с тэгом tagname (см. класс Tag)"""
