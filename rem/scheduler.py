@@ -11,6 +11,7 @@ import gc
 from queue import *
 from connmanager import *
 from rem.storages import *
+from rem.storages import PacketNamesStorage
 
 
 class SchedWatcher(Unpickable(tasks=TimedSet.create,
@@ -67,7 +68,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                            #storage with knowledge about nonassigned packets (packets that was created but not yet assigned to appropriate queue)
                            schedWatcher=SchedWatcher, #watcher for time scheduled events
                            connManager=ConnectionManager, #connections to others rems
-                           packetNames=emptyset, #set of packet`s names
                         ),
                 ICallbackAcceptor):
     BackupFilenameMatchRe = re.compile("sched-\d*.dump$")
@@ -77,8 +77,15 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         getattr(super(Scheduler, self), "__init__")()
         self.UpdateContext(context)
         self.ObjectRegistratorClass = FakeObjectRegistrator if context.execMode == "start" else ObjectRegistrator
+        self.packetNames = PacketNamesStorage()
         if context.useMemProfiler:
             self.initProfiler()
+
+    def __getstate__(self):
+        sdict = getattr(super(Scheduler, self), "__getstate__", lambda: self.__dict__)()
+        if 'packetNames' in sdict.keys():
+            del sdict['packetNames']
+        return sdict
 
     def UpdateContext(self, context=None):
         if context is not None:
@@ -206,9 +213,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.RegisterQueues(qRef)
             #output objects statistics
             ObjectRegistrator_.LogStats()
-            for packet_id in self.packStorage.keys():
-                name = self.packStorage[packet_id].name
-                self.packetNames.add(name)
+            names = [self.packStorage[packet_id].name for packet_id in self.packStorage.keys() if self.packStorage[packet_id].name != PacketState.HISTORIED]
+            self.packetNames.Update(names)
 
     def Restore(self):
         self.tagRef.Restore()

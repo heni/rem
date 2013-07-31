@@ -29,9 +29,9 @@ class ClientInfo(object):
         self.url = "http://%s:%d" % (hostname, cp.getint("server", "port"))
         self.admin_url = "http://%s:%d" % (hostname, cp.getint("server", "system_port"))
         self.readonly_url = "http://%s:%d" % (hostname, cp.getint("server", "readonly_port"))
-        self.connector = remclient.Connector(self.url, verbose=True)
+        self.connector = remclient.Connector(self.url, verbose=True, packet_name_policy=remclient.DUBLICATE_IGNORE)
         self.admin_connector = remclient.AdminConnector(self.admin_url, verbose=True)
-        self.readonly_connector = remclient.Connector(self.readonly_url, verbose=True)
+        self.readonly_connector = remclient.Connector(self.readonly_url, verbose=True, packet_name_policy=remclient.DUBLICATE_IGNORE)
 
     def LoadConfiguration(self, config_path, tmpdir):
         if config_path.startswith("svn+ssh://"):

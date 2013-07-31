@@ -2,6 +2,7 @@ from __future__ import with_statement
 import logging
 import os
 import sys
+import threading
 import time
 import weakref
 import bsddb3
@@ -10,6 +11,8 @@ import cPickle
 from common import *
 from callbacks import Tag, RemoteTag
 from journal import TagLogger
+from rem import ICallbackAcceptor, PacketState
+from rem.packet import JobPacket
 
 
 __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
@@ -290,3 +293,32 @@ class TagStorage(object):
                 tag.callbacks.clear()
                 self.infile_items[name] = cPickle.dumps(tag)
             self.infile_items.sync()
+
+
+class PacketNamesStorage(ICallbackAcceptor):
+    def __init__(self, names_list=None):
+        self.names = set(names_list or [])
+        self.lock = PickableLock()
+
+    def Add(self, pck_name):
+        with self.lock:
+            self.names.add(pck_name)
+
+    def Update(self, names_list=None):
+        with self.lock:
+            self.names.update(names_list or [])
+
+    def Exist(self, pck_name):
+        exist = False
+        with self.lock:
+            exist = pck_name in self.names
+        return exist
+
+    def Delete(self, pck_name):
+        with self.lock:
+            if pck_name in self.names:
+                self.names.remove(pck_name)
+
+    def OnChange(self, packet_ref):
+        if isinstance(packet_ref, JobPacket) and packet_ref.state == PacketState.HISTORIED:
+            self.Delete(packet_ref.name)

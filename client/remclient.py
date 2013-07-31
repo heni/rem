@@ -528,7 +528,7 @@ class Connector(object):
         self.proxy = RetriableXMLRPCProxy(url, tries=conn_retries, verbose=verbose, allow_none=True)
         self.verbose = verbose
         self.checksumDbPath = checksumDbPath
-        self.packet_name_policy=packet_name_policy
+        self.packet_name_policy = packet_name_policy
 
     def Queue(self, qname):
         """возвращает объект для работы с очередью c именем qname (см. класс Queue)"""
@@ -552,7 +552,7 @@ class Connector(object):
                 #raise RuntimeWarning(e.faultString)
             else:
                 raise RuntimeError(e.faultString)
-        except Exception, e:
+        except xmlrpclib.Fault, e:
             raise RuntimeError(e.faultString)
 
     def Tag(self, tagname):

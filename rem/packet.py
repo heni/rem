@@ -272,7 +272,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                            history=(list, []),
                            notify_emails=(list, []),
                            flags=int,
-                           kill_all_jobs_on_error = (bool, True)),
+                           kill_all_jobs_on_error=(bool, True)),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
@@ -359,8 +359,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             #temporary hack for fast fix NONPRJ-898 task
                 return False
         self.state = state
-        if state == PacketState.HISTORIED:
-            PacketCustomLogic(self).SchedCtx.Scheduler.packetNames.remove(self.name)
         logging.debug("packet %s\tnew state %r", self.name, self.state)
         self.FireEvent("change")
         self.history.append((self.state, time.time()))
@@ -404,7 +402,8 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             pipe_parents = list(p.id for p in pipe_parents)
             job = Job(shell, parents, pipe_parents, self, maxTryCount=tries,
                       limitter=None, max_err_len=max_err_len, retry_delay=retry_delay,
-                      pipe_fail=pipe_fail, description=description, notify_timeout=notify_timeout, max_working_time=max_working_time)
+                      pipe_fail=pipe_fail, description=description, notify_timeout=notify_timeout,
+                      max_working_time=max_working_time)
             self.jobs[job.id] = job
             if set_tag:
                 self.job_done_indicator[job.id] = set_tag

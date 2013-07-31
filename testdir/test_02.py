@@ -87,7 +87,6 @@ class T02(unittest.TestCase):
             pck.AddJobsBulk({"shell": "ps x", "set_tag": tagList[-2]}, {"shell": "echo xxx", "set_tag": tagList[-1]},
                             {"shell": "sleep 1"})
             queue.AddPacket(pck)
-            time.sleep(0.001)
             pckList.append(self.connector.PacketInfo(pck.id))
         logging.info("packets with prefix bulkpck(%s) added to queue %s, waiting until doing",
                      [pi.pck_id for pi in pckList], TestingQueue.Get())

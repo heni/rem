@@ -28,12 +28,11 @@ class T12(unittest.TestCase):
         queue = self.connector.Queue('checksum_cache_test')
         for _ in xrange(count):
             pck = self.connector.Packet(
-                'checksum_test %s' % time.time(),
+                'checksum_test',
                 time.time(),
                 wait_tags=[],
                 notify_emails=self.notifyEmails
             )
-            time.sleep(0.001)
             pck.AddJob(shell='true')
             pck.AddFiles({'test.bin': filePath})
             queue.AddPacket(pck)
