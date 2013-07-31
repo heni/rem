@@ -552,8 +552,6 @@ class Connector(object):
                 #raise RuntimeWarning(e.faultString)
             else:
                 raise RuntimeError(e.faultString)
-        except xmlrpclib.Fault, e:
-            raise RuntimeError(e.faultString)
 
     def Tag(self, tagname):
         """возвращает объект для работы с тэгом tagname (см. класс Tag)"""
@@ -647,10 +645,8 @@ class _RetriableMethod:
                 return self.method(*args)
             except self.IgnoreExcType, lastExc:
                 if self.verbose:
-                    name = getattr(self.method, '_Method__name', None) or \
-                           getattr(self.method, 'im_func', None)
-                    print >> sys.stderr, "%s: execution for method %s failed [try: %d]\t%s" % (
-                    time.ctime(), name, trying, lastExc)
+                    name = getattr(self.method, '_Method__name', None) or getattr(self.method, 'im_func', None)
+                    print >> sys.stderr, "%s: execution for method %s failed [try: %d]\t%s" % (time(), name, trying, lastExc)
             if trying >= self.tryCount:
                 break
             time.sleep(self.__timeout__(trying + 1))
@@ -658,7 +654,6 @@ class _RetriableMethod:
 
 
 class AuthTransport(xmlrpclib.Transport):
-
     def send_content(self, connection, request_body):
         connection.putheader("X-Username", getpass.getuser())
         connection.putheader("Content-Type", "text/xml")
@@ -672,9 +667,9 @@ class RetriableXMLRPCProxy(xmlrpclib.ServerProxy):
     def __init__(self, uri, tries, **kws):
         self.__maxTries = tries
         self.__verbose = kws.pop("verbose")
+        kws["transport"] = AuthTransport()
         xmlrpclib.ServerProxy.__init__(self, uri, **kws)
 
     def __getattr__(self, name):
-        return _RetriableMethod(xmlrpclib.ServerProxy.__getattr__(self, name), self.__maxTries, self.__verbose,
-                                socket.error)
+        return _RetriableMethod(xmlrpclib.ServerProxy.__getattr__(self, name), self.__maxTries, self.__verbose, socket.error)
 

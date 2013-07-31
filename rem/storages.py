@@ -162,7 +162,7 @@ class BinaryStorage(Unpickable(files=dict, lifeTime=(int, 3600), binDirectory=st
             tmpfile = None
             self.RegisterFile(BinaryFile(remPath, checksum, True))
         finally:
-            if tmpfile != None:
+            if tmpfile is not None:
                 os.unlink(tmpfile)
         return True
 

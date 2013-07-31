@@ -477,6 +477,7 @@ def scheduler_test():
     print_tags(_scheduler)
     qname = "userdata"
     print list_queues()
+    pendingLength = workedLength = suspendLength = 0
     if qname in _scheduler.qRef:
         pendingLength = len(_scheduler.qRef[qname].pending)
         workedLength = len(_scheduler.qRef[qname].worked)

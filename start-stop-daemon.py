@@ -236,7 +236,7 @@ class REMService(Service):
 
 
 def dispatch_work(service, opt, args):
-    if opt.mode in ("status"):
+    if opt.mode in ("status", ):
         pid = service.CheckProcess()
         if pid:
             print "%s is running as pid %s." % (service.name, pid)

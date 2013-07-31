@@ -58,8 +58,10 @@ class T10(unittest.TestCase):
         tag2 = "%s2" % tag
         pck = self.connector1.Packet("pck-%.0f" % time.time(), set_tag=tag1)
         self.connector1.Queue(TestingQueue.Get()).AddPacket(pck)
+
         pck2 = self.connector2.Packet("pck-%.0f" % time.time(), set_tag=tag2, wait_tags=[remote_tag1])
         self.connector2.Queue(TestingQueue.Get()).AddPacket(pck2)
+
         pck3 = self.connector1.Packet("pck-%.0f" % time.time(), wait_tags=[remote_tag2])
         self.connector1.Queue(TestingQueue.Get()).AddPacket(pck3)
 
