@@ -99,7 +99,7 @@ import warnings
 from constants import *
 
 __all__ = ["AdminConnector", "Connector"]
-MAX_PRIORITY = 2 ** 31 - 1
+MAX_PRIORITY = 2**31 - 1
 
 
 def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
@@ -120,8 +120,8 @@ def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, s
         except socket.error, msg:
             if sock is not None:
                 sock.close()
-    raise socket.error, msg
 
+    raise socket.error, msg
 
 socket.create_connection = create_connection_nodelay
 
@@ -194,8 +194,7 @@ class JobPacket(object):
         self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, packet_name_policy)
 
     def AddJob(self, shell, parents=None, pipe_parents=None, set_tag=None, tries=DEFAULT_TRIES_COUNT, files=None, \
-               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=NOTIFICATION_TIMEOUT,
-               max_working_time=KILL_JOB_DEFAULT_TIMEOUT):
+               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=NOTIFICATION_TIMEOUT, max_working_time=KILL_JOB_DEFAULT_TIMEOUT):
         """добавляет задачу в пакет
         shell - коммандная строка, которую следует выполнить
         tries - количество попыток выполнения команды (в случае неуспеха команда перазапускается ограниченное число раз) (по умолчанию: 5)
@@ -212,8 +211,8 @@ class JobPacket(object):
         if files is not None:
             self.AddFiles(files)
         return JobInfo(id=self.proxy.pck_add_job(self.id, shell, parents,
-                                                 pipe_parents, set_tag, tries, max_err_len, retry_delay,
-                                                 pipe_fail, description, notify_timeout, max_working_time))
+                       pipe_parents, set_tag, tries, max_err_len, retry_delay,
+                       pipe_fail, description, notify_timeout, max_working_time))
 
     def AddJobsBulk(self, *jobs):
         """быстрое(batch) добавление задач в пакет
@@ -242,9 +241,7 @@ class JobPacketInfo(object):
     """прокси объект для манипулирования пакетом задач в REM
     Объекты этого класса не нужно создавать вручную, правильный способ их получать - метод Queue.ListPackets"""
     DEF_INFO_TIMEOUT = 1800
-    DEF_ATTRS = set(
-        ["pck_id", "proxy", "updStamp", "update", "__dict__", "Suspend", "Resume", "Restart", "RestartFromErrors",
-         "Delete", "AddFiles", "multiupdate", "__setstatus__"])
+    DEF_ATTRS = set(["pck_id", "proxy", "updStamp", "update", "__dict__", "Suspend", "Resume", "Restart", "RestartFromErrors", "Delete", "AddFiles", "multiupdate", "__setstatus__"])
 
     def __init__(self, connector, pck_id):
         self.pck_id = pck_id
@@ -253,8 +250,7 @@ class JobPacketInfo(object):
         self.updStamp = 0
 
     def __getattribute__(self, attr):
-        if attr not in JobPacketInfo.DEF_ATTRS \
-            and time.time() - self.updStamp > JobPacketInfo.DEF_INFO_TIMEOUT:
+        if attr not in JobPacketInfo.DEF_ATTRS and time.time() - self.updStamp > JobPacketInfo.DEF_INFO_TIMEOUT:
             self.update()
         return object.__getattribute__(self, attr)
 
@@ -289,7 +285,7 @@ class JobPacketInfo(object):
                 goodObjects.add(obj)
             except xmlrpclib.Fault, e:
                 if verbose:
-                    print >> sys.stderr, "multicall exception raised: %s" % e
+                    print >>sys.stderr, "multicall exception raised: %s" % e
         return goodObjects
 
     def update(self):
@@ -361,7 +357,7 @@ class JobPacketInfo(object):
             import bsddb3
         except ImportError, e:
             if self.conn.verbose:
-                print >> sys.stderr, "Can't import bsddb3 module: %r" % e
+                print >>sys.stderr, "Can't import bsddb3 module: %r" % e
             return self._CalcFileChecksum(path)
 
         db = None
@@ -381,7 +377,7 @@ class JobPacketInfo(object):
             return checksum
         except bsddb3.db.DBError, e:
             if self.conn.verbose:
-                print >> sys.stderr, "Failed obtaining checksum from bsddb3 db: %r" % e
+                print >>sys.stderr, "Failed obtaining checksum from bsddb3 db: %r" % e
             return self._CalcFileChecksum(path)
         finally:
             if db is not None:
@@ -392,8 +388,7 @@ class JobPacketInfo(object):
             return self.proxy.check_binary_and_lock(checksum, localPath)
         except xmlrpclib.Fault, e:
             if self.conn.verbose:
-                print >> sys.stderr, "check_binary_and_lock raised exception: code=%s descr=%s" % (
-                e.faultCode, e.faultString)
+                print >>sys.stderr, "check_binary_and_lock raised exception: code=%s descr=%s" % (e.faultCode, e.faultString)
             return False
 
     def _AddFiles(self, files):
@@ -432,8 +427,7 @@ class JobPacketInfo(object):
             reTimes = re.search("\"started:\s(.*);\sfinished:\s(.*);", res.data)
             if not reTimes:
                 return 0
-            return time.mktime(time.strptime(reTimes.group(2), fmtTime)) - time.mktime(
-                time.strptime(reTimes.group(1), fmtTime))
+            return time.mktime(time.strptime(reTimes.group(2), fmtTime)) - time.mktime(time.strptime(reTimes.group(1), fmtTime))
 
         return sum(get_res_working_time(res) for res in itertools.chain(*(job.results for job in self.jobs)))
 
@@ -664,6 +658,7 @@ class AuthTransport(xmlrpclib.Transport):
 
 
 class RetriableXMLRPCProxy(xmlrpclib.ServerProxy):
+
     def __init__(self, uri, tries, **kws):
         self.__maxTries = tries
         self.__verbose = kws.pop("verbose")
