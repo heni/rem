@@ -116,11 +116,9 @@ def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, s
                 sock.settimeout(timeout)
             sock.connect(sa)
             return sock
-
         except socket.error, msg:
             if sock is not None:
                 sock.close()
-
     raise socket.error, msg
 
 socket.create_connection = create_connection_nodelay
