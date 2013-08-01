@@ -213,7 +213,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.RegisterQueues(qRef)
             #output objects statistics
             ObjectRegistrator_.LogStats()
-            names = [self.packStorage[packet_id].name for packet_id in self.packStorage.keys() if self.packStorage[packet_id].name != PacketState.HISTORIED]
+            names = [self.packStorage[packet_id].name for packet_id in self.packStorage.keys() if self.packStorage[packet_id].state != PacketState.HISTORIED]
             self.packetNames.Update(names)
 
     def Restore(self):
