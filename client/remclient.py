@@ -184,7 +184,7 @@ class JobPacket(object):
     DEFAULT_TRIES_COUNT = 5
 
     def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False,
-                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_DUBLICATE_POLICY):
+                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_PCK_DUPLICATE_NAME_POLICY):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
@@ -514,7 +514,7 @@ class TagsBulk(object):
 class Connector(object):
     """объект коннектор, для работы с REM"""
 
-    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=DEFAULT_DUBLICATE_POLICY):
+    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=DEFAULT_PCK_DUPLICATE_NAME_POLICY):
         """конструктор коннектора
         принимает один параметр - url REM сервера"""
         self.proxy = RetriableXMLRPCProxy(url, tries=conn_retries, verbose=verbose, allow_none=True)
@@ -539,7 +539,7 @@ class Connector(object):
             return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness,
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
         except xmlrpclib.Fault, e:
-            if self.packet_name_policy & DUBLICATE_WARNING and 'DublicatePackageNameException:' in e.faultString:
+            if self.packet_name_policy & PCK_DUPLICATE_NAME_WARNING and 'DublicatePackageNameException:' in e.faultString:
                 print >> sys.stderr, 'WARNING: %s ' % e.faultString
                 #raise RuntimeWarning(e.faultString)
             else:

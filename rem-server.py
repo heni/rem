@@ -80,8 +80,8 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUBLICATE_POLICY):
-    if packet_name_policy & (constants.DUBLICATE_EXCEPTION | constants.DUBLICATE_WARNING) and _scheduler.packetNames.Exist(packet_name):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_PCK_DUPLICATE_NAME_POLICY):
+    if packet_name_policy & (constants.PCK_DUPLICATE_NAME_EXCEPTION | constants.PCK_DUPLICATE_NAME_WARNING) and _scheduler.packetNames.Exist(packet_name):
         ex = DublicatePackageNameException(packet_name, _context.network_name)
         raise xmlrpclib.Fault(1, ex.message)
     if notify_emails is not None:

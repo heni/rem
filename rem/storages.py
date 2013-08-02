@@ -21,6 +21,7 @@ __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
 class GlobalPacketStorage(object):
     def __init__(self):
         self.box = weakref.WeakValueDictionary()
+        self.iteritems = self.box.iteritems
 
     def add(self, pck):
         self.box[pck.id] = pck
@@ -29,10 +30,7 @@ class GlobalPacketStorage(object):
         map(self.add, list)
 
     def __getitem__(self, item):
-        if item in self.box.keys():
-            return self.box[item]
-        else:
-            raise KeyError
+        return self.box[item]
 
     def __setitem__(self, key, value):
         self.box[key] = value
@@ -298,7 +296,7 @@ class TagStorage(object):
 class PacketNamesStorage(ICallbackAcceptor):
     def __init__(self, names_list=None):
         self.names = set(names_list or [])
-        self.lock = PickableLock()
+        self.lock = threading.Lock()
 
     def Add(self, pck_name):
         with self.lock:
@@ -322,3 +320,5 @@ class PacketNamesStorage(ICallbackAcceptor):
     def OnChange(self, packet_ref):
         if isinstance(packet_ref, JobPacket) and packet_ref.state == PacketState.HISTORIED:
             self.Delete(packet_ref.name)
+
+
