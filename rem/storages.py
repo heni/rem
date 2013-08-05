@@ -294,9 +294,12 @@ class TagStorage(object):
 
 
 class PacketNamesStorage(ICallbackAcceptor):
-    def __init__(self, names_list=None):
-        self.names = set(names_list or [])
+    def __init__(self, *args, **kwargs):
+        self.names = set(kwargs.get('names_list', []))
         self.lock = threading.Lock()
+
+    def __getstate__(self):
+        return {}
 
     def Add(self, pck_name):
         with self.lock:
