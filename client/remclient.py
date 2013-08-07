@@ -539,7 +539,7 @@ class Connector(object):
             return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness,
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
         except xmlrpclib.Fault, e:
-            if self.packet_name_policy & PCK_DUPLICATE_NAME_WARNING and 'DublicatePackageNameException:' in e.faultString:
+            if self.packet_name_policy & PCK_DUPLICATE_NAME_WARNING and 'DuplicatePackageNameException:' in e.faultString:
                 print >> sys.stderr, 'WARNING: %s ' % e.faultString
                 #raise RuntimeWarning(e.faultString)
             else:

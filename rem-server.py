@@ -16,10 +16,10 @@ import Queue as StdQueue
 from rem import *
 
 
-class DublicatePackageNameException(Exception):
+class DuplicatePackageNameException(Exception):
     def __init__(self, pck_name, serv_name, *args, **kwargs):
-        super(DublicatePackageNameException, self).__init__(*args, **kwargs)
-        self.message = 'DublicatePackageNameException: Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
+        super(DuplicatePackageNameException, self).__init__(*args, **kwargs)
+        self.message = 'DuplicatePackageNameException: Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
 
 
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
@@ -82,7 +82,7 @@ def readonly_method(func):
 @traced_rpc_method("info")
 def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_PCK_DUPLICATE_NAME_POLICY):
     if packet_name_policy & (constants.PCK_DUPLICATE_NAME_EXCEPTION | constants.PCK_DUPLICATE_NAME_WARNING) and _scheduler.packetNames.Exist(packet_name):
-        ex = DublicatePackageNameException(packet_name, _context.network_name)
+        ex = DuplicatePackageNameException(packet_name, _context.network_name)
         raise xmlrpclib.Fault(1, ex.message)
     if notify_emails is not None:
         assert isinstance(notify_emails, list), "notify_emails must be list or None"
