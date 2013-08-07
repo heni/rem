@@ -23,7 +23,7 @@ class T13(unittest.TestCase):
         self.connector.Queue(TestingQueue.Get()).ChangeWorkingLimit(5)
         return pck
 
-    def testMailMock(self):
+    def testErrorAndKilling(self):
         """Test killing job on timeout"""
         pck_name = 'kill-test-%s' % self.timestamp
         pck = self._create_slow_packet(pckname=pck_name)
