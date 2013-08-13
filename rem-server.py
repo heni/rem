@@ -92,9 +92,6 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     pck = JobPacket(packet_name, priority, _context, notify_emails,
                     wait_tags=wait_tags, set_tag=_scheduler.tagRef.AcquireTag(set_tag),
                     kill_all_jobs_on_error=kill_all_jobs_on_error)
-    _scheduler.packetNames.Add(packet_name)
-    pck.AddCallbackListener(_scheduler.packetNames)
-
     for tag in wait_tags:
         _scheduler.connManager.Subscribe(tag)
     _scheduler.tempStorage.StorePacket(pck)
@@ -117,7 +114,7 @@ def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
 
 @traced_rpc_method("info")
 def pck_addto_queue(pck_id, queue_name, packet_name_policy):
-    pck = _scheduler.tempStorage.PickPacket(pck_id, packet_name_policy)
+    pck = _scheduler.tempStorage.PickPacket(pck_id)
     packet_name = pck.name
     if packet_name_policy & (constants.DENY_DUPLICATE_NAMES_POLICY | constants.WARN_DUPLICATE_NAMES_POLICY) and _scheduler.packetNames.Exist(packet_name):
         ex = DuplicatePackageNameException(packet_name, _context.network_name)

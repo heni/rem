@@ -208,8 +208,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.RegisterQueues(qRef)
             #output objects statistics
             ObjectRegistrator_.LogStats()
-            names = [item.name for packet_id, item in self.packStorage.iteritems() if item.state != PacketState.HISTORIED]
-            self.packetNames.Update(names)
 
     def Restore(self):
         self.tagRef.Restore()
@@ -245,6 +243,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                         pck.changeState(PacketState.ERROR)
                     dstStorage = self.packStorage
                 dstStorage.Add(pck)
+                if pck.state != PacketState.HISTORIED:
+                    self.packetNames.Add(pck.name)
                 q.relocatePacket(pck)
             if q.IsAlive():
                 q.Resume(resumeWorkable=True)
@@ -254,6 +254,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         queue = self.Queue(qname)
         self.packStorage.Add(pck)
         queue.Add(pck)
+        self.packetNames.Add(pck.name)
+        pck.AddCallbackListener(self.packetNames)
 
     def GetPacket(self, pck_id):
         return self.packStorage.GetPacket(pck_id)

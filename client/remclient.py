@@ -141,9 +141,13 @@ class Queue(object):
     def AddPacket(self, pck):
         """добавляет в очередь созданный пакет, см. класс JobPacket"""
         try:
-            self.proxy.pck_addto_queue(pck.id, self.name)
+            self.proxy.pck_addto_queue(pck.id, self.name, self.conn.packet_name_policy)
         except xmlrpclib.Fault, e:
-            raise DuplicatePackageNameException(e.faultString)
+            if 'DuplicatePackageNameException' in e.faultString:
+                if self.conn.packet_name_policy & DENY_DUPLICATE_NAMES_POLICY:
+                    raise DuplicatePackageNameException(e.faultString)
+                else:
+                    logging.warning(e.faultString)
 
     def Suspend(self):
         """приостанавливает выполнение новых задач из очереди"""
