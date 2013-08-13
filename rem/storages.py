@@ -11,8 +11,8 @@ import cPickle
 from common import *
 from callbacks import Tag, RemoteTag
 from journal import TagLogger
-from rem import ICallbackAcceptor, PacketState
-from rem.packet import JobPacket
+from callbacks import ICallbackAcceptor
+from packet import PacketState, JobPacket
 
 
 __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]

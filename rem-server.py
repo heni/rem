@@ -80,8 +80,8 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_PCK_DUPLICATE_NAME_POLICY):
-    if packet_name_policy & (constants.PCK_DUPLICATE_NAME_EXCEPTION | constants.PCK_DUPLICATE_NAME_WARNING) and _scheduler.packetNames.Exist(packet_name):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY):
+    if packet_name_policy & constants.DENY_DUPLICATE_NAMES_POLICY and _scheduler.packetNames.Exist(packet_name):
         ex = DuplicatePackageNameException(packet_name, _context.network_name)
         raise xmlrpclib.Fault(1, ex.message)
     if notify_emails is not None:
@@ -116,8 +116,12 @@ def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
 
 
 @traced_rpc_method("info")
-def pck_addto_queue(pck_id, queue_name):
-    pck = _scheduler.tempStorage.PickPacket(pck_id)
+def pck_addto_queue(pck_id, queue_name, packet_name_policy):
+    pck = _scheduler.tempStorage.PickPacket(pck_id, packet_name_policy)
+    packet_name = pck.name
+    if packet_name_policy & (constants.DENY_DUPLICATE_NAMES_POLICY | constants.WARN_DUPLICATE_NAMES_POLICY) and _scheduler.packetNames.Exist(packet_name):
+        ex = DuplicatePackageNameException(packet_name, _context.network_name)
+        raise xmlrpclib.Fault(1, ex.message)
     if pck is not None:
         _scheduler.RegisterPacket(queue_name, pck)
         return

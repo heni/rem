@@ -85,6 +85,7 @@
     HISTORIED   - пакет задач удален из очереди выполнения
 """
 from __future__ import with_statement
+import logging
 import xmlrpclib
 import time
 import os
@@ -96,10 +97,15 @@ import socket
 import sys
 import itertools
 import warnings
-from constants import *
+from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY,DENY_DUPLICATE_NAMES_POLICY,KILL_JOB_DEFAULT_TIMEOUT,NOTIFICATION_TIMEOUT,WARN_DUPLICATE_NAMES_POLICY
 
 __all__ = ["AdminConnector", "Connector"]
 MAX_PRIORITY = 2**31 - 1
+
+
+class DuplicatePackageNameException(Exception):
+    def __init__(self, *args, **kwargs):
+        super(DuplicatePackageNameException, self).__init__(*args, **kwargs)
 
 
 def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
@@ -134,7 +140,10 @@ class Queue(object):
 
     def AddPacket(self, pck):
         """добавляет в очередь созданный пакет, см. класс JobPacket"""
-        self.proxy.pck_addto_queue(pck.id, self.name)
+        try:
+            self.proxy.pck_addto_queue(pck.id, self.name)
+        except xmlrpclib.Fault, e:
+            raise DuplicatePackageNameException(e.faultString)
 
     def Suspend(self):
         """приостанавливает выполнение новых задач из очереди"""
@@ -184,7 +193,7 @@ class JobPacket(object):
     DEFAULT_TRIES_COUNT = 5
 
     def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False,
-                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_PCK_DUPLICATE_NAME_POLICY):
+                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_DUPLICATE_NAMES_POLICY):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
@@ -514,7 +523,7 @@ class TagsBulk(object):
 class Connector(object):
     """объект коннектор, для работы с REM"""
 
-    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=DEFAULT_PCK_DUPLICATE_NAME_POLICY):
+    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=DEFAULT_DUPLICATE_NAMES_POLICY):
         """конструктор коннектора
         принимает один параметр - url REM сервера"""
         self.proxy = RetriableXMLRPCProxy(url, tries=conn_retries, verbose=verbose, allow_none=True)
@@ -539,11 +548,10 @@ class Connector(object):
             return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness,
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
         except xmlrpclib.Fault, e:
-            if self.packet_name_policy & PCK_DUPLICATE_NAME_WARNING and 'DuplicatePackageNameException:' in e.faultString:
-                print >> sys.stderr, 'WARNING: %s ' % e.faultString
-                #raise RuntimeWarning(e.faultString)
+            if 'DuplicatePackageNameException' in e.faultString:
+                raise DuplicatePackageNameException(e.faultString)
             else:
-                raise RuntimeError(e.faultString)
+                raise
 
     def Tag(self, tagname):
         """возвращает объект для работы с тэгом tagname (см. класс Tag)"""
