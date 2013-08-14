@@ -97,7 +97,7 @@ import socket
 import sys
 import itertools
 import warnings
-from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY,DENY_DUPLICATE_NAMES_POLICY,KILL_JOB_DEFAULT_TIMEOUT,NOTIFICATION_TIMEOUT,WARN_DUPLICATE_NAMES_POLICY
+from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY, DENY_DUPLICATE_NAMES_POLICY, KILL_JOB_DEFAULT_TIMEOUT, NOTIFICATION_TIMEOUT, WARN_DUPLICATE_NAMES_POLICY
 
 __all__ = ["AdminConnector", "Connector"]
 MAX_PRIORITY = 2**31 - 1
@@ -145,7 +145,7 @@ class Queue(object):
         except xmlrpclib.Fault, e:
             if 'DuplicatePackageNameException' in e.faultString:
                 if self.conn.packet_name_policy & DENY_DUPLICATE_NAMES_POLICY:
-                    raise DuplicatePackageNameException(e.faultString)
+                    raise DuplicatePackageNameException(e.faultString[30:])
                 else:
                     logging.warning(e.faultString)
 
@@ -553,7 +553,7 @@ class Connector(object):
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
         except xmlrpclib.Fault, e:
             if 'DuplicatePackageNameException' in e.faultString:
-                raise DuplicatePackageNameException(e.faultString)
+                raise DuplicatePackageNameException(e.faultString[30:])
             else:
                 raise
 
