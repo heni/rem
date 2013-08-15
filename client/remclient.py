@@ -464,8 +464,8 @@ class Tag(object):
         return self.proxy.reset_tag(self.name)
 
     def ListDependentPackets(self):
-        """список id пакетов, которые будут запущены при установке данного пакета"""
-        return self.get_dependent_packets_for_tag(self.name)
+        """список id пакетов, которые будут запущены при установке данного тэга"""
+        return self.proxy.get_dependent_packets_for_tag(self.name)
 
 
 class TagsBulk(object):

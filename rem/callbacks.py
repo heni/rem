@@ -47,9 +47,6 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
     def GetListenersNumber(self):
         return len(self.callbacks)
 
-    def GetListnersIds(self):
-        return [k.id for k in self.callbacks.iterkeys()]
-
     def __getstate__(self):
         sdict = self.__dict__.copy()
         callbacks = dict(sdict.pop("callbacks"))
@@ -92,6 +89,9 @@ class Tag(CallbackHolder):
 
     def IsRemote(self):
         return False
+
+    def GetListenersIds(self):
+        return [k.id for k in self.callbacks.iterkeys()]
 
 
 class RemoteTag(Tag):
