@@ -116,7 +116,7 @@ class JobPacketImpl(object):
             tagname = tag.GetFullname()
             if tagname in self.waitTags:
                 self.waitTags.remove(tagname)
-            if len(self.waitTags) == 0 and self.state == "SUSPENDED":
+            if len(self.waitTags) == 0 and self.state == PacketState.SUSPENDED:
                 self.Resume()
 
     def UpdateTagDependencies(self, tagStorage):
@@ -369,10 +369,9 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         if not hasattr(self, "waitJobs"):
             self.UpdateJobsDependencies()
         if isinstance(ref, Job):
-            if self.state not in (PacketState.WORKABLE, PacketState.PENDING) \
-                or ref.id not in self.jobs \
-                or self.waitJobs[ref.id] \
-                or not self.directory:
+            if (self.state not in (PacketState.WORKABLE, PacketState.PENDING)
+                or ref.id not in self.jobs or self.waitJobs[ref.id] 
+                or not self.directory):
                 raise RuntimeError("not all conditions are met for starting job %s; packet state: %s; directory: %s" % (
                     ref.id, self.state, self.directory))
             logging.debug("job %s\tstarted", ref.shell)
@@ -487,38 +486,72 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         history = self.History()
         total_time = history[-1][1] - history[0][1]
         wait_time = 0
+
         for ((state, start_time), (_, end_time)) in zip(history, history[1:] + [("", time.time())]):
-            if state in ("SUSPENDED", "WAITING",):
+            if state in (PacketState.SUSPENDED, PacketState.WAITING):
                 wait_time += end_time - start_time
+
+        result_tag = self.done_indicator.name if self.done_indicator else None
+        waiting_time = self.waitingTime if self.state == PacketState.WAITING else None
+
+        all_tags = list(getattr(self, 'allTags', []))
+
         status = dict(name=self.name,
                       state=self.state,
                       wait=list(self.waitTags),
-                      result_tag=self.done_indicator.name if self.done_indicator else None,
+                      all_tags=all_tags,
+                      result_tag=result_tag,
                       priority=self.priority,
-                      history=self.History(),
+                      history=history,
                       total_time=total_time,
                       wait_time=wait_time,
-                      last_modified=self.History()[-1][1],
-                      waiting_time=self.waitingTime if self.state == PacketState.WAITING else None)
-        if self.state in (
-            PacketState.ERROR, PacketState.SUSPENDED, PacketState.WORKABLE, PacketState.PENDING,
-            PacketState.SUCCESSFULL, PacketState.WAITING):
+                      last_modified=history[-1][1],
+                      waiting_time=waiting_time)
+
+        if self.state in (PacketState.ERROR, PacketState.SUSPENDED,
+                          PacketState.WORKABLE, PacketState.PENDING,
+                          PacketState.SUCCESSFULL, PacketState.WAITING):
             status["jobs"] = []
             for jid, job in self.jobs.iteritems():
                 result = job.Result()
-                results = [safeStringEncode(str(res)) for res in job.results] if result else []
-                state = "done" if jid in self.done \
-                    else "working" if jid in self.working \
-                    else "pending" if jid in self.leafs \
-                    else "errored" if result and not result.IsSuccessfull() \
-                    else "suspended"
-                wait_jobs = map(str, self.waitJobs.get(jid, [])) if self.state == PacketState.WORKABLE else []
+                results = []
+                if result:
+                    results = [safeStringEncode(str(res)) for res in job.results]
+
+                state = "suspended"
+                if jid in self.done:
+                    state = "done"
+                elif jid in self.working:
+                    state = "working"
+                elif jid in self.leafs:
+                    state = "pending"
+                elif result and not result.IsSuccessfull():
+                    state = "errored"
+
+                wait_jobs = []
+                if self.state == PacketState.WORKABLE:
+                    wait_jobs = map(str, self.waitJobs.get(jid, []))
+
+                parents = job.parents or []
+                pipe_parents = job.inputs or []
+
                 output_filename = None
                 if getattr(job, 'output', None) and os.path.isfile(job.output.name):
                     output_filename = os.path.basename(job.output.name)
+
+
                 status["jobs"].append(
-                    dict(id=str(job.id), shell=job.shell, desc=job.description, state=state, results=results,
-                         output_filename=output_filename, wait_jobs=wait_jobs))
+                    dict(id=str(job.id),
+                         shell=job.shell,
+                         desc=job.description,
+                         state=state,
+                         results=results,
+                         parents=parents,
+                         pipe_parents=pipe_parents,
+                         output_filename=output_filename,
+                         wait_jobs=wait_jobs,
+                     )
+                )
         return status
 
     def AddBinary(self, binname, file):
