@@ -266,6 +266,9 @@ class TagStorage(object):
     def Restore(self):
         self.tag_logger.Restore()
 
+    def ListDependentPackets(self, tag_name):
+        return self.RawTag(tag_name).GetListnersIds(tag_name)
+
     def tofileOldItems(self):
         old_tags = set()
         for name, tag in self.inmem_items.items():
