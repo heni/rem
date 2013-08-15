@@ -147,6 +147,12 @@ def reset_tag(tagname):
     tag.Reset()
 
 
+@readonly_method
+@traced_rpc_method()
+def get_dependent_packets_for_tag(tagname):
+    return _scheduler.tagRef.ListDependentPackets(tagname)
+
+
 @traced_rpc_method("info")
 def queue_suspend(queue_name):
     _scheduler.Queue(queue_name).Suspend()
@@ -337,6 +343,7 @@ class RemServer(object):
         self.register_function(set_tag, "set_tag")
         self.register_function(unset_tag, "unset_tag")
         self.register_function(reset_tag, "reset_tag")
+        self.register_function(get_dependent_packets_for_tag, "get_dependent_packets_for_tag")
         self.register_function(queue_suspend, "queue_suspend")
         self.register_function(queue_resume, "queue_resume")
         self.register_function(queue_status, "queue_status")

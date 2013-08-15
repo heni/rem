@@ -463,6 +463,10 @@ class Tag(object):
         """сброс тэга и остановка всех зависящих от него пакетов"""
         return self.proxy.reset_tag(self.name)
 
+    def ListDependentPackets(self):
+        """список id пакетов, которые будут запущены при установке данного тэга"""
+        return self.proxy.get_dependent_packets_for_tag(self.name)
+
 
 class TagsBulk(object):
     """Class for bulk operations on tags."""
