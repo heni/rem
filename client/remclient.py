@@ -658,7 +658,7 @@ class _RetriableMethod:
             except self.IgnoreExcType, lastExc:
                 if self.verbose:
                     name = getattr(self.method, '_Method__name', None) or getattr(self.method, 'im_func', None)
-                    logging.getLogger('remclient.default').error("%s: execution for method %s failed [try: %d]\t%s", time(), name, trying, lastExc)
+                    logging.getLogger('remclient.default').error("%s: execution for method %s failed [try: %d]\t%s", time.time(), name, trying, lastExc)
             if trying >= self.tryCount:
                 break
             time.sleep(self.__timeout__(trying + 1))
