@@ -85,6 +85,7 @@
     HISTORIED   - пакет задач удален из очереди выполнения
 """
 from __future__ import with_statement
+import logging
 import xmlrpclib
 import time
 import os
@@ -95,11 +96,16 @@ import types
 import socket
 import sys
 import itertools
-import warnings
-from constants import *
+from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY, DENY_DUPLICATE_NAMES_POLICY, KILL_JOB_DEFAULT_TIMEOUT, NOTIFICATION_TIMEOUT, WARN_DUPLICATE_NAMES_POLICY
 
 __all__ = ["AdminConnector", "Connector"]
 MAX_PRIORITY = 2**31 - 1
+
+
+class DuplicatePackageNameException(Exception):
+    def __init__(self, message, *args, **kwargs):
+        super(DuplicatePackageNameException, self).__init__(*args, **kwargs)
+        self.message = message
 
 
 def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
@@ -134,7 +140,14 @@ class Queue(object):
 
     def AddPacket(self, pck):
         """добавляет в очередь созданный пакет, см. класс JobPacket"""
-        self.proxy.pck_addto_queue(pck.id, self.name)
+        try:
+            self.proxy.pck_addto_queue(pck.id, self.name, self.conn.packet_name_policy)
+        except xmlrpclib.Fault, e:
+            if 'DuplicatePackageNameException' in e.faultString:
+                if self.conn.packet_name_policy & DENY_DUPLICATE_NAMES_POLICY:
+                    raise DuplicatePackageNameException(e.faultString)
+                else:
+                    self.conn.logger.warning(e.faultString)
 
     def Suspend(self):
         """приостанавливает выполнение новых задач из очереди"""
@@ -184,7 +197,7 @@ class JobPacket(object):
     DEFAULT_TRIES_COUNT = 5
 
     def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False,
-                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_PCK_DUPLICATE_NAME_POLICY):
+                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_DUPLICATE_NAMES_POLICY):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
@@ -293,7 +306,7 @@ class JobPacketInfo(object):
     def Suspend(self, kill_jobs=False):
         """приостанавливает выполнение пакета"""
         if kill_jobs:
-            warnings.warn("packet.Suspend(kill_jobs=True) is deprecated, use packet.Stop()", DeprecationWarning)
+            self.conn.logger.warning("packet.Suspend(kill_jobs=True) is deprecated, use packet.Stop()")
         self.proxy.pck_suspend(self.pck_id, kill_jobs)
         self.update()
 
@@ -332,7 +345,7 @@ class JobPacketInfo(object):
         """удаляет пакет (для работающих пакетов рекомендуется сначала выполнить Suspend())"""
         try:
             self.proxy.pck_delete(self.pck_id)
-        except Exception, inst:
+        except xmlrpclib.Fault, inst:
             raise RuntimeError(inst.faultString)
 
     @classmethod
@@ -386,7 +399,7 @@ class JobPacketInfo(object):
             return self.proxy.check_binary_and_lock(checksum, localPath)
         except xmlrpclib.Fault, e:
             if self.conn.verbose:
-                print >>sys.stderr, "check_binary_and_lock raised exception: code=%s descr=%s" % (e.faultCode, e.faultString)
+                self.conn.logger.error("check_binary_and_lock raised exception: code=%s descr=%s", e.faultCode, e.faultString)
             return False
 
     def _AddFiles(self, files):
@@ -461,6 +474,10 @@ class Tag(object):
         """сброс тэга и остановка всех зависящих от него пакетов"""
         return self.proxy.reset_tag(self.name)
 
+    def ListDependentPackets(self):
+        """список id пакетов, которые будут запущены при установке данного тэга"""
+        return self.proxy.get_dependent_packets_for_tag(self.name)
+
 
 class TagsBulk(object):
     """Class for bulk operations on tags."""
@@ -514,13 +531,17 @@ class TagsBulk(object):
 class Connector(object):
     """объект коннектор, для работы с REM"""
 
-    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=DEFAULT_PCK_DUPLICATE_NAME_POLICY):
+    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=DEFAULT_DUPLICATE_NAMES_POLICY, logger_name=None):
         """конструктор коннектора
         принимает один параметр - url REM сервера"""
         self.proxy = RetriableXMLRPCProxy(url, tries=conn_retries, verbose=verbose, allow_none=True)
         self.verbose = verbose
         self.checksumDbPath = checksumDbPath
         self.packet_name_policy = packet_name_policy
+        if logger_name is None:
+            self.logger = logging.getLogger('remclient.default')
+        else:
+            self.logger = logging.getLogger(logger_name)
 
     def Queue(self, qname):
         """возвращает объект для работы с очередью c именем qname (см. класс Queue)"""
@@ -539,11 +560,10 @@ class Connector(object):
             return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness,
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
         except xmlrpclib.Fault, e:
-            if self.packet_name_policy & PCK_DUPLICATE_NAME_WARNING and 'DublicatePackageNameException:' in e.faultString:
-                print >> sys.stderr, 'WARNING: %s ' % e.faultString
-                #raise RuntimeWarning(e.faultString)
+            if 'DuplicatePackageNameException' in e.faultString:
+                raise DuplicatePackageNameException(e.faultString)
             else:
-                raise RuntimeError(e.faultString)
+                raise
 
     def Tag(self, tagname):
         """возвращает объект для работы с тэгом tagname (см. класс Tag)"""
@@ -638,7 +658,7 @@ class _RetriableMethod:
             except self.IgnoreExcType, lastExc:
                 if self.verbose:
                     name = getattr(self.method, '_Method__name', None) or getattr(self.method, 'im_func', None)
-                    print >> sys.stderr, "%s: execution for method %s failed [try: %d]\t%s" % (time(), name, trying, lastExc)
+                    logging.getLogger('remclient.default').error("%s: execution for method %s failed [try: %d]\t%s", time(), name, trying, lastExc)
             if trying >= self.tryCount:
                 break
             time.sleep(self.__timeout__(trying + 1))
@@ -666,3 +686,12 @@ class RetriableXMLRPCProxy(xmlrpclib.ServerProxy):
     def __getattr__(self, name):
         return _RetriableMethod(xmlrpclib.ServerProxy.__getattr__(self, name), self.__maxTries, self.__verbose, socket.error)
 
+
+def _InitializeDefaultLogger():
+    logger = logging.getLogger('remclient.default')
+    logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+    logger.addHandler(handler)
+
+_InitializeDefaultLogger()

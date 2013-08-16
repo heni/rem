@@ -16,10 +16,10 @@ import Queue as StdQueue
 from rem import *
 
 
-class DublicatePackageNameException(Exception):
+class DuplicatePackageNameException(Exception):
     def __init__(self, pck_name, serv_name, *args, **kwargs):
-        super(DublicatePackageNameException, self).__init__(*args, **kwargs)
-        self.message = 'DublicatePackageNameException: Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
+        super(DuplicatePackageNameException, self).__init__(*args, **kwargs)
+        self.message = 'DuplicatePackageNameException: Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
 
 
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
@@ -80,9 +80,9 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_PCK_DUPLICATE_NAME_POLICY):
-    if packet_name_policy & (constants.PCK_DUPLICATE_NAME_EXCEPTION | constants.PCK_DUPLICATE_NAME_WARNING) and _scheduler.packetNames.Exist(packet_name):
-        ex = DublicatePackageNameException(packet_name, _context.network_name)
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY):
+    if packet_name_policy & constants.DENY_DUPLICATE_NAMES_POLICY and _scheduler.packetNames.Exist(packet_name):
+        ex = DuplicatePackageNameException(packet_name, _context.network_name)
         raise xmlrpclib.Fault(1, ex.message)
     if notify_emails is not None:
         assert isinstance(notify_emails, list), "notify_emails must be list or None"
@@ -92,9 +92,6 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     pck = JobPacket(packet_name, priority, _context, notify_emails,
                     wait_tags=wait_tags, set_tag=_scheduler.tagRef.AcquireTag(set_tag),
                     kill_all_jobs_on_error=kill_all_jobs_on_error)
-    _scheduler.packetNames.Add(packet_name)
-    pck.AddCallbackListener(_scheduler.packetNames)
-
     for tag in wait_tags:
         _scheduler.connManager.Subscribe(tag)
     _scheduler.tempStorage.StorePacket(pck)
@@ -116,8 +113,12 @@ def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
 
 
 @traced_rpc_method("info")
-def pck_addto_queue(pck_id, queue_name):
+def pck_addto_queue(pck_id, queue_name, packet_name_policy):
     pck = _scheduler.tempStorage.PickPacket(pck_id)
+    packet_name = pck.name
+    if packet_name_policy & (constants.DENY_DUPLICATE_NAMES_POLICY | constants.WARN_DUPLICATE_NAMES_POLICY) and _scheduler.packetNames.Exist(packet_name):
+        ex = DuplicatePackageNameException(packet_name, _context.network_name)
+        raise xmlrpclib.Fault(1, ex.message)
     if pck is not None:
         _scheduler.RegisterPacket(queue_name, pck)
         return
@@ -156,6 +157,12 @@ def unset_tag(tagname):
 def reset_tag(tagname):
     tag = _scheduler.tagRef.AcquireTag(tagname)
     tag.Reset()
+
+
+@readonly_method
+@traced_rpc_method()
+def get_dependent_packets_for_tag(tagname):
+    return _scheduler.tagRef.ListDependentPackets(tagname)
 
 
 @traced_rpc_method("info")
@@ -348,6 +355,7 @@ class RemServer(object):
         self.register_function(set_tag, "set_tag")
         self.register_function(unset_tag, "unset_tag")
         self.register_function(reset_tag, "reset_tag")
+        self.register_function(get_dependent_packets_for_tag, "get_dependent_packets_for_tag")
         self.register_function(queue_suspend, "queue_suspend")
         self.register_function(queue_resume, "queue_resume")
         self.register_function(queue_status, "queue_status")

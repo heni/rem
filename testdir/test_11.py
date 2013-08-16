@@ -16,7 +16,7 @@ class T11(unittest.TestCase):
 
     def _create_packet(self, pckname):
         pck = self.connector.Packet(pckname, self.timestamp)
-        pck.AddJob("sleep 1");
+        pck.AddJob("sleep 1")
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
 
     def testReadonlyOperations(self):

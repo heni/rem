@@ -39,6 +39,7 @@ class ICommander(object):
         self.options = opt
         self.conn = remclient.Connector(self.options.url, conn_retries=2, verbose=True)
 
+
 def print_pck_info(pck, extended=False):
     workTime = pck.GetWorkingTime()
     hd = "packet '%s':" % pck.pck_id
@@ -65,7 +66,7 @@ class ListCommander(ICommander):
         if self.options.queue:
             q = self.conn.Queue(self.options.queue)
             pckList = q.ListPackets(self.options.filter, self.options.name, self.options.prefix)
-            #pckList = remclient.JobPacketInfo.multiupdate(pckList)
+            pckList = remclient.JobPacketInfo.multiupdate(pckList)
             for pck in pckList:
                 print_pck_info(pck)
         elif self.options.list_tags:

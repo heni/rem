@@ -11,8 +11,8 @@ import cPickle
 from common import *
 from callbacks import Tag, RemoteTag
 from journal import TagLogger
-from rem import ICallbackAcceptor, PacketState
-from rem.packet import JobPacket
+from callbacks import ICallbackAcceptor
+from packet import PacketState, JobPacket
 
 
 __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
@@ -278,6 +278,9 @@ class TagStorage(object):
 
     def Restore(self):
         self.tag_logger.Restore()
+
+    def ListDependentPackets(self, tag_name):
+        return self.RawTag(tag_name).GetListenersIds()
 
     def tofileOldItems(self):
         old_tags = set()
