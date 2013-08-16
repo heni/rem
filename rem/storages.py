@@ -327,4 +327,10 @@ class PacketNamesStorage(ICallbackAcceptor):
         if isinstance(packet_ref, JobPacket) and packet_ref.state == PacketState.HISTORIED:
             self.Delete(packet_ref.name)
 
+    def OnJobDone(self, job_ref):
+        pass
+
+    def OnJobGet(self, job_ref):
+        pass
+
 
