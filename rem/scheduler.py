@@ -9,6 +9,7 @@ from collections import deque
 from cPickle import Pickler, Unpickler
 import gc
 
+
 from job import FuncJob, FuncRunner
 from common import Unpickable, TimedSet, PickableLock, FakeObjectRegistrator, ObjectRegistrator, nullobject
 from rem import PacketCustomLogic
