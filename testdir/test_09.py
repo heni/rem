@@ -42,9 +42,9 @@ class T09(unittest.TestCase):
 
                 self.signal.wait()
 
-                conn = remclient.Connector(self.remUrl)
+                conn = remclient.Connector(self.remUrl, packet_name_policy=remclient.IGNORE_DUPLICATE_NAMES_POLICY)
                 queue = conn.Queue(self.queue)
-
+                tag = self.tag
                 if self.clientType == 'tag_creator':
                     pack = conn.Packet(
                         'tag_creator.' + tag,

@@ -16,6 +16,11 @@ import Queue as StdQueue
 from rem import *
 
 
+class DuplicatePackageNameException(Exception):
+    def __init__(self, pck_name, serv_name, *args, **kwargs):
+        super(DuplicatePackageNameException, self).__init__(*args, **kwargs)
+        self.message = 'DuplicatePackageNameException: Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
+
 
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     def __init__(self, poolsize, *args, **kws):
@@ -75,7 +80,10 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY):
+    if packet_name_policy & constants.DENY_DUPLICATE_NAMES_POLICY and _scheduler.packetNames.Exist(packet_name):
+        ex = DuplicatePackageNameException(packet_name, _context.network_name)
+        raise xmlrpclib.Fault(1, ex.message)
     if notify_emails is not None:
         assert isinstance(notify_emails, list), "notify_emails must be list or None"
         for email in notify_emails:
@@ -93,7 +101,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
 
 @traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
-                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time = constants.KILL_JOB_DEFAULT_TIMEOUT):
+                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
         parents = [pck.jobs[int(jid)] for jid in parents]
@@ -105,8 +113,12 @@ def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
 
 
 @traced_rpc_method("info")
-def pck_addto_queue(pck_id, queue_name):
+def pck_addto_queue(pck_id, queue_name, packet_name_policy):
     pck = _scheduler.tempStorage.PickPacket(pck_id)
+    packet_name = pck.name
+    if packet_name_policy & (constants.DENY_DUPLICATE_NAMES_POLICY | constants.WARN_DUPLICATE_NAMES_POLICY) and _scheduler.packetNames.Exist(packet_name):
+        ex = DuplicatePackageNameException(packet_name, _context.network_name)
+        raise xmlrpclib.Fault(1, ex.message)
     if pck is not None:
         _scheduler.RegisterPacket(queue_name, pck)
         return
