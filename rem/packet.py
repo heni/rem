@@ -5,8 +5,9 @@ import os
 import time
 import shutil
 
-from callbacks import *
-from job import *
+from callbacks import CallbackHolder, ICallbackAcceptor, Tag, tagset
+from common import BinaryFile, PickableRLock, SendEmail, Unpickable, safeStringEncode
+from job import Job, PackedExecuteResult
 import osspec
 
 
@@ -369,9 +370,10 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         if not hasattr(self, "waitJobs"):
             self.UpdateJobsDependencies()
         if isinstance(ref, Job):
-            if (self.state not in (PacketState.WORKABLE, PacketState.PENDING)
-                or ref.id not in self.jobs or self.waitJobs[ref.id] 
-                or not self.directory):
+            if self.state not in (PacketState.WORKABLE, PacketState.PENDING) \
+                or ref.id not in self.jobs \
+                or self.waitJobs[ref.id] \
+                or not self.directory:
                 raise RuntimeError("not all conditions are met for starting job %s; packet state: %s; directory: %s" % (
                     ref.id, self.state, self.directory))
             logging.debug("job %s\tstarted", ref.shell)
