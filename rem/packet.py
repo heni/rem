@@ -530,8 +530,8 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                 if self.state == PacketState.WORKABLE:
                     wait_jobs = map(str, self.waitJobs.get(jid, []))
 
-                parents = job.parents or []
-                pipe_parents = job.inputs or []
+                parents = map(str, job.parents or [])
+                pipe_parents = map(str, job.inputs or [])
 
                 output_filename = None
                 if getattr(job, 'output', None) and os.path.isfile(job.output.name):

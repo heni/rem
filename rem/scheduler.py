@@ -1,5 +1,6 @@
 from __future__ import with_statement
 import copy
+import shutil
 import time
 import logging
 import os
@@ -8,11 +9,15 @@ from collections import deque
 from cPickle import Pickler, Unpickler
 import gc
 
-from queue import *
-from connmanager import *
-from rem import FuncJob
-from rem.storages import *
-from rem.storages import PacketNamesStorage
+
+from job import FuncJob, FuncRunner
+from common import Unpickable, TimedSet, PickableLock, FakeObjectRegistrator, ObjectRegistrator, nullobject
+from rem import PacketCustomLogic
+from connmanager import ConnectionManager
+from packet import JobPacket, PacketState, PacketFlag
+from queue import Queue
+from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage
+from callbacks import ICallbackAcceptor
 
 
 class SchedWatcher(Unpickable(tasks=TimedSet.create,
