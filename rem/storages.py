@@ -2,6 +2,7 @@ from __future__ import with_statement
 import logging
 import os
 import sys
+import threading
 import time
 import weakref
 import bsddb3
@@ -10,6 +11,8 @@ import cPickle
 from common import *
 from callbacks import Tag, RemoteTag
 from journal import TagLogger
+from callbacks import ICallbackAcceptor
+from packet import PacketState, JobPacket
 
 
 __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
@@ -18,12 +21,22 @@ __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
 class GlobalPacketStorage(object):
     def __init__(self):
         self.box = weakref.WeakValueDictionary()
+        self.iteritems = self.box.iteritems
 
     def add(self, pck):
         self.box[pck.id] = pck
 
     def update(self, list):
         map(self.add, list)
+
+    def __getitem__(self, item):
+        return self.box[item]
+
+    def __setitem__(self, key, value):
+        self.box[key] = value
+
+    def keys(self):
+        return self.box.keys()
 
     Add = add
 
@@ -281,3 +294,37 @@ class TagStorage(object):
                 tag.callbacks.clear()
                 self.infile_items[name] = cPickle.dumps(tag)
             self.infile_items.sync()
+
+
+class PacketNamesStorage(ICallbackAcceptor):
+    def __init__(self, *args, **kwargs):
+        self.names = set(kwargs.get('names_list', []))
+        self.lock = threading.Lock()
+
+    def __getstate__(self):
+        return {}
+
+    def Add(self, pck_name):
+        with self.lock:
+            self.names.add(pck_name)
+
+    def Update(self, names_list=None):
+        with self.lock:
+            self.names.update(names_list or [])
+
+    def Exist(self, pck_name):
+        exist = False
+        with self.lock:
+            exist = pck_name in self.names
+        return exist
+
+    def Delete(self, pck_name):
+        with self.lock:
+            if pck_name in self.names:
+                self.names.remove(pck_name)
+
+    def OnChange(self, packet_ref):
+        if isinstance(packet_ref, JobPacket) and packet_ref.state == PacketState.HISTORIED:
+            self.Delete(packet_ref.name)
+
+

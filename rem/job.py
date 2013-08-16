@@ -133,7 +133,6 @@ class Job(Unpickable(err=nullobject,
         SendEmail(self.packetRef.notify_emails, msgHelper)
         self._notified = True
 
-
     def CanStart(self):
         if self.limitter:
             return self.limitter.CanStart()
