@@ -28,7 +28,7 @@ class T13(unittest.TestCase):
         pck_name = 'kill-test-%s' % self.timestamp
         pck = self._create_slow_packet(pckname=pck_name)
         pck_info = self.connector.PacketInfo(pck)
-        state = WaitForExecution(pck_info, timeout=60)
+        state = WaitForExecution(pck_info, timeout=1)
         self.assertEqual(state, 'ERROR')
 
 
