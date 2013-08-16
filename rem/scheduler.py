@@ -10,6 +10,7 @@ import gc
 
 from queue import *
 from connmanager import *
+from rem.job import FuncJob
 from rem.storages import *
 from rem.storages import PacketNamesStorage
 
