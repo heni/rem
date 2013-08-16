@@ -273,7 +273,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                            history=(list, []),
                            notify_emails=(list, []),
                            flags=int,
-                           kill_all_jobs_on_error = (bool, True)),
+                           kill_all_jobs_on_error=(bool, True)),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):

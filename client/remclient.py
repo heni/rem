@@ -85,6 +85,7 @@
     HISTORIED   - пакет задач удален из очереди выполнения
 """
 from __future__ import with_statement
+import logging
 import xmlrpclib
 import time
 import os
@@ -95,10 +96,17 @@ import types
 import socket
 import sys
 import itertools
-import warnings
+from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY, DENY_DUPLICATE_NAMES_POLICY, KILL_JOB_DEFAULT_TIMEOUT, NOTIFICATION_TIMEOUT, WARN_DUPLICATE_NAMES_POLICY
 
 __all__ = ["AdminConnector", "Connector"]
 MAX_PRIORITY = 2**31 - 1
+
+
+class DuplicatePackageNameException(Exception):
+    def __init__(self, message, *args, **kwargs):
+        super(DuplicatePackageNameException, self).__init__(*args, **kwargs)
+        self.message = message
+
 
 def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None):
     """source_address argument used only for python2.7 compatibility"""
@@ -114,15 +122,12 @@ def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, s
                 sock.settimeout(timeout)
             sock.connect(sa)
             return sock
-
         except socket.error, msg:
             if sock is not None:
                 sock.close()
-    raise socket.error, msg   
+    raise socket.error, msg
 
 socket.create_connection = create_connection_nodelay
-
-
 
 
 class Queue(object):
@@ -135,7 +140,14 @@ class Queue(object):
 
     def AddPacket(self, pck):
         """добавляет в очередь созданный пакет, см. класс JobPacket"""
-        self.proxy.pck_addto_queue(pck.id, self.name)
+        try:
+            self.proxy.pck_addto_queue(pck.id, self.name, self.conn.packet_name_policy)
+        except xmlrpclib.Fault, e:
+            if 'DuplicatePackageNameException' in e.faultString:
+                if self.conn.packet_name_policy & DENY_DUPLICATE_NAMES_POLICY:
+                    raise DuplicatePackageNameException(e.faultString)
+                else:
+                    self.conn.logger.warning(e.faultString)
 
     def Suspend(self):
         """приостанавливает выполнение новых задач из очереди"""
@@ -183,17 +195,17 @@ class Queue(object):
 class JobPacket(object):
     """прокси объект для создания пакетов задач REM"""
     DEFAULT_TRIES_COUNT = 5
-    
-    def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False, kill_all_jobs_on_error=True):
+
+    def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False,
+                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_DUPLICATE_NAMES_POLICY):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
             raise RuntimeError("result tag %s already set for packet %s" % (set_tag, name))
-        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error)
+        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, packet_name_policy)
 
-
-    def AddJob(self, shell, parents = [], pipe_parents = [], set_tag = None, tries = DEFAULT_TRIES_COUNT, files = None, \
-               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=604800, max_working_time=1209600):
+    def AddJob(self, shell, parents=None, pipe_parents=None, set_tag=None, tries=DEFAULT_TRIES_COUNT, files=None, \
+               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=NOTIFICATION_TIMEOUT, max_working_time=KILL_JOB_DEFAULT_TIMEOUT):
         """добавляет задачу в пакет
         shell - коммандная строка, которую следует выполнить
         tries - количество попыток выполнения команды (в случае неуспеха команда перазапускается ограниченное число раз) (по умолчанию: 5)
@@ -205,11 +217,11 @@ class JobPacket(object):
         files - список файлов, которые нужно положить в рабочую директорию задания (рабочая директория у всех заданий внутри одного пакета одна и та же)
                можно вместо списка указать dictionary, в этом случае значение словаря будет указывать на путь до файла, а ключ на имя, с которым этот файл следует положить 
                в рабочий каталог задания (реально в рабочем каталоге создаются symlink'и на файлы, располагающиеся в одной общей директории, куда копируются все бинарники)"""
-        parents = [job.id for job in parents]
-        pipe_parents = [job.id for job in pipe_parents]
+        parents = [job.id for job in parents or []]
+        pipe_parents = [job.id for job in pipe_parents or []]
         if files is not None:
             self.AddFiles(files)
-        return JobInfo(id = self.proxy.pck_add_job(self.id, shell, parents,
+        return JobInfo(id=self.proxy.pck_add_job(self.id, shell, parents,
                        pipe_parents, set_tag, tries, max_err_len, retry_delay,
                        pipe_fail, description, notify_timeout, max_working_time))
 
@@ -240,7 +252,7 @@ class JobPacketInfo(object):
     """прокси объект для манипулирования пакетом задач в REM
     Объекты этого класса не нужно создавать вручную, правильный способ их получать - метод Queue.ListPackets"""
     DEF_INFO_TIMEOUT = 1800
-    DEF_ATTRS = set(["pck_id", "proxy", "updStamp", "update","__dict__", "Suspend", "Resume", "Restart", "RestartFromErrors", "Delete", "AddFiles", "multiupdate", "__setstatus__"])
+    DEF_ATTRS = set(["pck_id", "proxy", "updStamp", "update", "__dict__", "Suspend", "Resume", "Restart", "RestartFromErrors", "Delete", "AddFiles", "multiupdate", "__setstatus__"])
 
     def __init__(self, connector, pck_id):
         self.pck_id = pck_id
@@ -249,15 +261,14 @@ class JobPacketInfo(object):
         self.updStamp = 0
 
     def __getattribute__(self, attr):
-        if attr not in JobPacketInfo.DEF_ATTRS \
-           and time.time() - self.updStamp > JobPacketInfo.DEF_INFO_TIMEOUT:
+        if attr not in JobPacketInfo.DEF_ATTRS and time.time() - self.updStamp > JobPacketInfo.DEF_INFO_TIMEOUT:
             self.update()
         return object.__getattribute__(self, attr)
 
     def __setstatus__(self, status):
         for jobinfo in status.get("jobs", []):
             if "wait_jobs" in jobinfo:
-                jobinfo["wait_jobs"] = [JobInfo(id = jobId) for jobId in jobinfo["wait_jobs"]]
+                jobinfo["wait_jobs"] = [JobInfo(id=jobId) for jobId in jobinfo["wait_jobs"]]
         status["jobs"] = [JobInfo(**jobinfo) for jobinfo in status.get("jobs", [])]
         self.__dict__.update(status)
         self.updStamp = time.time()
@@ -285,7 +296,7 @@ class JobPacketInfo(object):
                 goodObjects.add(obj)
             except xmlrpclib.Fault, e:
                 if verbose:
-                    print >>sys.stderr, "multicall exception raised: %s" % e 
+                    print >>sys.stderr, "multicall exception raised: %s" % e
         return goodObjects
 
     def update(self):
@@ -295,7 +306,7 @@ class JobPacketInfo(object):
     def Suspend(self, kill_jobs=False):
         """приостанавливает выполнение пакета"""
         if kill_jobs:
-            warnings.warn("packet.Suspend(kill_jobs=True) is deprecated, use packet.Stop()", DeprecationWarning)
+            self.conn.logger.warning("packet.Suspend(kill_jobs=True) is deprecated, use packet.Stop()")
         self.proxy.pck_suspend(self.pck_id, kill_jobs)
         self.update()
 
@@ -334,7 +345,7 @@ class JobPacketInfo(object):
         """удаляет пакет (для работающих пакетов рекомендуется сначала выполнить Suspend())"""
         try:
             self.proxy.pck_delete(self.pck_id)
-        except Exception, inst:
+        except xmlrpclib.Fault, inst:
             raise RuntimeError(inst.faultString)
 
     @classmethod
@@ -352,7 +363,7 @@ class JobPacketInfo(object):
     def _GetFileChecksum(self, path, db_path=None):
         if db_path is None:
             return self._CalcFileChecksum(path)
-        
+
         try:
             import bsddb3
         except ImportError, e:
@@ -388,7 +399,7 @@ class JobPacketInfo(object):
             return self.proxy.check_binary_and_lock(checksum, localPath)
         except xmlrpclib.Fault, e:
             if self.conn.verbose:
-                print >>sys.stderr, "check_binary_and_lock raised exception: code=%s descr=%s" % (e.faultCode, e.faultString)
+                self.conn.logger.error("check_binary_and_lock raised exception: code=%s descr=%s", e.faultCode, e.faultString)
             return False
 
     def _AddFiles(self, files):
@@ -434,7 +445,7 @@ class JobPacketInfo(object):
 
 class JobInfo(object):
     """объект, инкапсулирующий информацию о задаче REM"""
-    
+
     def __init__(self, **kws):
         self.__dict__.update(kws)
 
@@ -470,6 +481,7 @@ class Tag(object):
 
 class TagsBulk(object):
     """Class for bulk operations on tags."""
+
     def __init__(self, conn, tags=None, name_regex=None, prefix=None):
         self.conn = conn
         if tags is not None:
@@ -518,19 +530,25 @@ class TagsBulk(object):
 
 class Connector(object):
     """объект коннектор, для работы с REM"""
-    
-    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None):
+
+    def __init__(self, url, conn_retries=5, verbose=False, checksumDbPath=None, packet_name_policy=DEFAULT_DUPLICATE_NAMES_POLICY, logger_name=None):
         """конструктор коннектора
         принимает один параметр - url REM сервера"""
         self.proxy = RetriableXMLRPCProxy(url, tries=conn_retries, verbose=verbose, allow_none=True)
         self.verbose = verbose
         self.checksumDbPath = checksumDbPath
+        self.packet_name_policy = packet_name_policy
+        if logger_name is None:
+            self.logger = logging.getLogger('remclient.default')
+        else:
+            self.logger = logging.getLogger(logger_name)
 
     def Queue(self, qname):
         """возвращает объект для работы с очередью c именем qname (см. класс Queue)"""
         return Queue(self, qname)
 
-    def Packet(self, pckname, priority = MAX_PRIORITY, notify_emails = [], wait_tags = (), set_tag = None, check_tag_uniqueness=False, kill_all_jobs_on_error=True):
+    def Packet(self, pckname, priority=MAX_PRIORITY, notify_emails=[], wait_tags=(), set_tag=None,
+               check_tag_uniqueness=False, kill_all_jobs_on_error=True):
         """создает новый пакет с именем pckname
             priority - приоритет выполнения пакета
             notify_emails - список почтовых адресов, для уведомления об ошибках
@@ -538,7 +556,14 @@ class Connector(object):
             set_tag - тэг, устанавливаемый по завершении работы пакеты
             kill_all_jobs_on_error - при неудачном завершении задания остальные задания прекращают работу.
         возвращает объект класса JobPacket"""
-        return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness, kill_all_jobs_on_error=kill_all_jobs_on_error)
+        try:
+            return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness,
+                             kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
+        except xmlrpclib.Fault, e:
+            if 'DuplicatePackageNameException' in e.faultString:
+                raise DuplicatePackageNameException(e.faultString)
+            else:
+                raise
 
     def Tag(self, tagname):
         """возвращает объект для работы с тэгом tagname (см. класс Tag)"""
@@ -556,8 +581,8 @@ class Connector(object):
         """возвращает объект для манипуляций с пакетом (см. класс JobPacketInfo)
         принимает один параметр - объект типа JobPacket"""
         pck_id = packet.id if isinstance(packet, JobPacket) \
-                        else packet if isinstance(packet, types.StringTypes) \
-                        else None
+            else packet if isinstance(packet, types.StringTypes) \
+            else None
         if pck_id is None:
             raise RuntimeError("can't create PacketInfo instance from %r" % packet)
         return JobPacketInfo(self, pck_id)
@@ -592,7 +617,7 @@ class AdminConnector(object):
         return self.proxy.resume_client(name)
 
     def ListClients(self):
-        """возвращает топологию сети""" 
+        """возвращает топологию сети"""
         return map(lambda x: ServerInfo(**x), self.proxy.list_clients())
 
     def ClientInfo(self, name):
@@ -611,31 +636,34 @@ class AdminConnector(object):
 class _RetriableMethod:
     TIMEOUT = 30
     PROGR_MULT = 5
+
     @classmethod
     def __timeout__(cls, spentTrying):
         return cls.TIMEOUT + cls.PROGR_MULT ** spentTrying
+
     def __init__(self, method, tryCount, verbose, IgnoreExcType):
         self.method = method
         self.tryCount = tryCount
         self.verbose = verbose
         self.IgnoreExcType = IgnoreExcType
+
     def __getattr__(self, name):
         return _RetriableMethod(getattr(self.method, name), self.tryCount, self.verbose, self.IgnoreExcType)
+
     def __call__(self, *args):
         lastExc = None
         for trying in itertools.count():
-            try: 
+            try:
                 return self.method(*args)
             except self.IgnoreExcType, lastExc:
                 if self.verbose:
-                    name = getattr(self.method, '_Method__name', None) or \
-                            getattr(self.method, 'im_func', None)
-                    print >>sys.stderr, "%s: execution for method %s failed [try: %d]\t%s" % (time.ctime(), name, trying, lastExc)
+                    name = getattr(self.method, '_Method__name', None) or getattr(self.method, 'im_func', None)
+                    logging.getLogger('remclient.default').error("%s: execution for method %s failed [try: %d]\t%s", time(), name, trying, lastExc)
             if trying >= self.tryCount:
                 break
             time.sleep(self.__timeout__(trying + 1))
         raise lastExc
-        
+
 
 class AuthTransport(xmlrpclib.Transport):
     def send_content(self, connection, request_body):
@@ -646,8 +674,9 @@ class AuthTransport(xmlrpclib.Transport):
         if request_body:
             connection.send(request_body)
 
+
 class RetriableXMLRPCProxy(xmlrpclib.ServerProxy):
-    
+
     def __init__(self, uri, tries, **kws):
         self.__maxTries = tries
         self.__verbose = kws.pop("verbose")
@@ -657,3 +686,12 @@ class RetriableXMLRPCProxy(xmlrpclib.ServerProxy):
     def __getattr__(self, name):
         return _RetriableMethod(xmlrpclib.ServerProxy.__getattr__(self, name), self.__maxTries, self.__verbose, socket.error)
 
+
+def _InitializeDefaultLogger():
+    logger = logging.getLogger('remclient.default')
+    logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+    logger.addHandler(handler)
+
+_InitializeDefaultLogger()
