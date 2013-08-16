@@ -520,15 +520,11 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                 if result:
                     results = [safeStringEncode(str(res)) for res in job.results]
 
-                state = "suspended"
-                if jid in self.done:
-                    state = "done"
-                elif jid in self.working:
-                    state = "working"
-                elif jid in self.leafs:
-                    state = "pending"
-                elif result and not result.IsSuccessfull():
-                    state = "errored"
+                state = "done" if jid in self.done \
+                    else "working" if jid in self.working \
+                    else "pending" if jid in self.leafs \
+                    else "errored" if result and not result.IsSuccessfull() \
+                    else "suspended"
 
                 wait_jobs = []
                 if self.state == PacketState.WORKABLE:
