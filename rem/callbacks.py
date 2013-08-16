@@ -90,6 +90,9 @@ class Tag(CallbackHolder):
     def IsRemote(self):
         return False
 
+    def GetListenersIds(self):
+        return [k.id for k in self.callbacks.iterkeys()]
+
 
 class RemoteTag(Tag):
     def __init__(self, tagname):
