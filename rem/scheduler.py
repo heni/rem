@@ -10,9 +10,9 @@ import gc
 
 from queue import *
 from connmanager import *
-from rem.job import FuncJob
-from rem.storages import *
-from rem.storages import PacketNamesStorage
+from job import FuncJob
+from storages import *
+from storages import PacketNamesStorage
 
 
 class SchedWatcher(Unpickable(tasks=TimedSet.create,
