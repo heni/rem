@@ -1,13 +1,13 @@
 import unittest
-import logging
-import remclient 
 import time
+
+import remclient
 from testdir import *
 
 
 class T05(unittest.TestCase):
     """Checking for various reported problems"""
-    
+
     def setUp(self):
         self.connector = Config.Get().server1.connector
 

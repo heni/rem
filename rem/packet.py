@@ -1,10 +1,13 @@
 from __future__ import with_statement
+import logging
+import tempfile
+import os
+import time
+import shutil
 
-import logging, tempfile, os, time, shutil
-
-from callbacks import *
-from common import *
-from job import *
+from callbacks import CallbackHolder, ICallbackAcceptor, Tag, tagset
+from common import BinaryFile, PickableRLock, SendEmail, Unpickable, safeStringEncode
+from job import Job, PackedExecuteResult
 import osspec
 
 
@@ -12,27 +15,27 @@ class PacketState(object):
     CREATED = "CREATED"                 #created only packet
     WORKABLE = "WORKABLE"               #working packet without pending jobs
     PENDING = "PENDING"                 #working packet with pending jobs 
-    SUSPENDED  = "SUSPENDED"            #suspended packet
+    SUSPENDED = "SUSPENDED"            #suspended packet
     ERROR = "ERROR"                     #unresolved error exists
     SUCCESSFULL = "SUCCESSFULL"         #successfully done packet
     HISTORIED = "HISTORIED"             #only for history archives
     WAITING = "WAITING"                 #wait for executing (until job.continueTime)
     NONINITIALIZED = "NONINITIALIZED"   #after reset
     allowed = {
-            CREATED: (WORKABLE, SUSPENDED, NONINITIALIZED),
-            WORKABLE: (SUSPENDED, ERROR, SUCCESSFULL, PENDING, WAITING, NONINITIALIZED),
-            PENDING: (SUSPENDED, WORKABLE, ERROR, WAITING, NONINITIALIZED),
-            SUSPENDED: (WORKABLE, HISTORIED, WAITING, ERROR, NONINITIALIZED),
-            WAITING: (PENDING, SUSPENDED, ERROR, NONINITIALIZED),
-            ERROR: (SUSPENDED, HISTORIED, NONINITIALIZED),
-            SUCCESSFULL: (HISTORIED, NONINITIALIZED),
-            NONINITIALIZED: (CREATED,),
-            HISTORIED: ()}
+        CREATED: (WORKABLE, SUSPENDED, NONINITIALIZED),
+        WORKABLE: (SUSPENDED, ERROR, SUCCESSFULL, PENDING, WAITING, NONINITIALIZED),
+        PENDING: (SUSPENDED, WORKABLE, ERROR, WAITING, NONINITIALIZED),
+        SUSPENDED: (WORKABLE, HISTORIED, WAITING, ERROR, NONINITIALIZED),
+        WAITING: (PENDING, SUSPENDED, ERROR, NONINITIALIZED),
+        ERROR: (SUSPENDED, HISTORIED, NONINITIALIZED),
+        SUCCESSFULL: (HISTORIED, NONINITIALIZED),
+        NONINITIALIZED: (CREATED,),
+        HISTORIED: ()}
 
 
 class PacketFlag:
     USER_SUSPEND = 0x01              #suspended by user
-    RCVR_ERROR   = 0x02              #recovering error detected
+    RCVR_ERROR = 0x02              #recovering error detected
 
 
 class PCL_StateChange(object):
@@ -42,25 +45,30 @@ class PCL_StateChange(object):
     def on_success(cls, pck):
         pck.SetDoneTags()
         pck.ReleasePlace()
+
     state_dispatcher[PacketState.SUCCESSFULL] = "on_success"
 
     @classmethod
     def on_delete(cls, pck):
         pck.ReleasePlace()
+
     state_dispatcher[PacketState.HISTORIED] = "on_delete"
 
     @classmethod
     def on_error(cls, pck):
         if pck.directory and not os.path.isdir(pck.directory):
             pck.ReleasePlace()
+
     state_dispatcher[PacketState.ERROR] = "on_error"
 
 
 class PacketCustomLogic(object):
-    from messages import GetHelperByPacketState, GetEmergencyHelper
+    from messages import GetHelperByPacketState, GetEmergencyHelper, GetLongExecutionWarningHelper
+
     SchedCtx = None
     StateMessageHelper = staticmethod(GetHelperByPacketState)
     EmergencyMessageHelper = staticmethod(GetEmergencyHelper)
+    LongExecutionWorkningHelper = staticmethod(GetLongExecutionWarningHelper)
 
     def __init__(self, pck):
         self.pck = pck
@@ -74,10 +82,17 @@ class PacketCustomLogic(object):
             SendEmail(self.pck.notify_emails, msgHelper)
 
     def DoEmergencyAction(self):
-        logging.error("incorrect state for \"Get\" operation: %s, packet %s will be markered for delete", self.pck.state, self.pck.name)
+        logging.error("incorrect state for \"Get\" operation: %s, packet %s will be markered for delete",
+                      self.pck.state, self.pck.name)
         msgHelper = self.EmergencyMessageHelper(self.pck, self.SchedCtx)
         if msgHelper:
             SendEmail(self.pck.notify_emails, msgHelper)
+
+    def DoLongExecutionWarning(self, job):
+        logging.warning("Packet's '%s' job '%s' execution takes too long time", job.packetRef.name, job.id)
+        msgHelper = self.LongExecutionWorkningHelper(job, self.SchedCtx)
+        logging.warning('msgHelper: %s, ', type(msgHelper))
+        SendEmail(self.pck.notify_emails, msgHelper)
 
     @classmethod
     def UpdateContext(cls, context):
@@ -85,8 +100,8 @@ class PacketCustomLogic(object):
 
 
 class JobPacketImpl(object):
-    
     """tags manipulation methods"""
+
     def SetWaitingTags(self, wait_tags):
         for tag in wait_tags:
             tag.AddCallbackListener(self)
@@ -102,7 +117,7 @@ class JobPacketImpl(object):
             tagname = tag.GetFullname()
             if tagname in self.waitTags:
                 self.waitTags.remove(tagname)
-            if len(self.waitTags) == 0 and self.state == "SUSPENDED":
+            if len(self.waitTags) == 0 and self.state == PacketState.SUSPENDED:
                 self.Resume()
 
     def UpdateTagDependencies(self, tagStorage):
@@ -117,6 +132,7 @@ class JobPacketImpl(object):
                 self.job_done_indicator[jid] = tagStorage.AcquireTag(self.job_done_indicator[jid].name)
 
     """links manipulation methods"""
+
     def ReleaseLinks(self):
         tmpLinks, self.binLinks = self.binLinks, {}
         while tmpLinks:
@@ -152,6 +168,7 @@ class JobPacketImpl(object):
                 self.CreateLink(binname, file)
 
     """file resource manipulation methods"""
+
     def ReleasePlace(self):
         self.ReleaseLinks()
         if self.directory and os.path.isdir(self.directory):
@@ -185,8 +202,8 @@ class JobPacketImpl(object):
         if self.directory:
             try:
                 files = os.listdir(self.directory)
-            except:
-                logging.exception("directory %s listing error", self.directory)
+            except Exception, e:
+                logging.exception("directory %s listing error: %s", self.directory, e)
         return files
 
     def GetFile(self, filename):
@@ -202,6 +219,7 @@ class JobPacketImpl(object):
             return data
 
     """process internal job start/stop"""
+
     def ProcessJobStart(self, job):
         job.input = self.createInput(job.id)
         job.output = self.createOutput(job.id)
@@ -240,28 +258,29 @@ class JobPacketImpl(object):
         return nState, nTimeout, not self.working
 
 
-class JobPacket(Unpickable(lock = PickableRLock.create,
-                           jobs = dict,
-                           job_done_indicator = dict,
-                           edges = dict,
-                           binLinks = dict,
-                           done = set,
-                           leafs = set,
-                           working = set,
-                           waitTags = set,
-                           waitingTime = int,
-                           state = (str, PacketState.CREATED),
-                           history = (list, []),
-                           notify_emails = (list, []),
-                           flags = int),
-                CallbackHolder, 
+# job module.
+class JobPacket(Unpickable(lock=PickableRLock.create,
+                           jobs=dict,
+                           job_done_indicator=dict,
+                           edges=dict,
+                           binLinks=dict,
+                           done=set,
+                           leafs=set,
+                           working=set,
+                           waitTags=set,
+                           waitingTime=int,
+                           state=(str, PacketState.CREATED),
+                           history=(list, []),
+                           notify_emails=(list, []),
+                           flags=int,
+                           kill_all_jobs_on_error=(bool, True)),
+                CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
-
     INCORRECT = -1
 
-    def __init__(self, name, priority, context, notify_emails, wait_tags = (), set_tag = None):
-        getattr(super(JobPacket, self), "__init__")()
+    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True):
+        super(JobPacket, self).__init__()
         self.name = name
         self.state = PacketState.NONINITIALIZED
         self.Init(context)
@@ -270,7 +289,8 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
         self.id = os.path.split(self.directory)[-1]
         self.history.append((self.state, time.time()))
         self.SetWaitingTags(wait_tags)
-        self.done_indicator = set_tag 
+        self.done_indicator = set_tag
+        self.kill_all_jobs_on_error = kill_all_jobs_on_error
 
     def Init(self, context):
         logging.info("packet init: %r %s", self, self.state)
@@ -315,7 +335,7 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
                 stream = self.streams[("in", jid)] = open(writer.name, "r")
             return stream
         raise RuntimeError("alien job input request")
- 
+
     def createOutput(self, jid):
         if jid in self.jobs:
             filename = self.stream_file(jid, "out")
@@ -351,10 +371,11 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
             self.UpdateJobsDependencies()
         if isinstance(ref, Job):
             if self.state not in (PacketState.WORKABLE, PacketState.PENDING) \
-                  or ref.id not in self.jobs \
-                  or self.waitJobs[ref.id] \
-                  or not self.directory:
-                raise RuntimeError("not all conditions are met for starting job %s; packet state: %s; directory: %s" % (ref.id, self.state, self.directory))
+                or ref.id not in self.jobs \
+                or self.waitJobs[ref.id] \
+                or not self.directory:
+                raise RuntimeError("not all conditions are met for starting job %s; packet state: %s; directory: %s" % (
+                    ref.id, self.state, self.directory))
             logging.debug("job %s\tstarted", ref.shell)
             with self.lock:
                 self.ProcessJobStart(ref)
@@ -374,15 +395,15 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
             self.ProcessTagEvent(ref)
 
     def Add(self, shell, parents, pipe_parents, set_tag, tries,
-            max_err_len, retry_delay, pipe_fail, description):
+            max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time):
         if self.state not in (PacketState.CREATED, PacketState.SUSPENDED):
             raise RuntimeError("incorrect state for \"Add\" operation: %s" % self.state)
         with self.lock:
             parents = list(set(p.id for p in parents + pipe_parents))
             pipe_parents = list(p.id for p in pipe_parents)
-            job = Job(shell, parents, pipe_parents, self, maxTryCount = tries,
-                      limitter = None, max_err_len=max_err_len, retry_delay=retry_delay,
-                      pipe_fail=pipe_fail, description=description)
+            job = Job(shell, parents, pipe_parents, self, maxTryCount=tries,
+                      limitter=None, max_err_len=max_err_len, retry_delay=retry_delay,
+                      pipe_fail=pipe_fail, description=description, notify_timeout=notify_timeout, max_working_time=max_working_time)
             self.jobs[job.id] = job
             if set_tag:
                 self.job_done_indicator[job.id] = set_tag
@@ -420,12 +441,12 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
             for jid in self.jobs:
                 if jid not in discovered and jid not in self.done:
                     visit(jid)
-            #reset tries count for discovered jobs
+                    #reset tries count for discovered jobs
             for jid in discovered:
                 self.jobs[jid].tries = 0
             self.leafs = set(jid for jid in discovered if not self.waitJobs[jid])
 
-    def Resume(self, resumeWorkable = False):
+    def Resume(self, resumeWorkable=False):
         allowed_states = [PacketState.CREATED, PacketState.SUSPENDED]
         if resumeWorkable:
             allowed_states.append(PacketState.WORKABLE)
@@ -467,36 +488,70 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
         history = self.History()
         total_time = history[-1][1] - history[0][1]
         wait_time = 0
+
         for ((state, start_time), (_, end_time)) in zip(history, history[1:] + [("", time.time())]):
-            if state in ("SUSPENDED", "WAITING",):
+            if state in (PacketState.SUSPENDED, PacketState.WAITING):
                 wait_time += end_time - start_time
-        status = dict(name = self.name,
-                    state = self.state,
-                    wait = list(self.waitTags),
-                    result_tag = self.done_indicator.name if self.done_indicator else None,
-                    priority = self.priority,
-                    history = self.History(),
-                    total_time = total_time,
-                    wait_time = wait_time,
-                    last_modified = self.History()[-1][1],
-                    waiting_time = self.waitingTime if self.state == PacketState.WAITING else None)
-        if self.state in (PacketState.ERROR, PacketState.SUSPENDED, PacketState.WORKABLE, PacketState.PENDING, PacketState.SUCCESSFULL, PacketState.WAITING):
+
+        result_tag = self.done_indicator.name if self.done_indicator else None
+        waiting_time = self.waitingTime if self.state == PacketState.WAITING else None
+
+        all_tags = list(getattr(self, 'allTags', []))
+
+        status = dict(name=self.name,
+                      state=self.state,
+                      wait=list(self.waitTags),
+                      all_tags=all_tags,
+                      result_tag=result_tag,
+                      priority=self.priority,
+                      history=history,
+                      total_time=total_time,
+                      wait_time=wait_time,
+                      last_modified=history[-1][1],
+                      waiting_time=waiting_time)
+
+        if self.state in (PacketState.ERROR, PacketState.SUSPENDED,
+                          PacketState.WORKABLE, PacketState.PENDING,
+                          PacketState.SUCCESSFULL, PacketState.WAITING):
             status["jobs"] = []
             for jid, job in self.jobs.iteritems():
                 result = job.Result()
-                results = [safeStringEncode(str(res)) for res in job.results] if result else []
+                results = []
+                if result:
+                    results = [safeStringEncode(str(res)) for res in job.results]
+
                 state = "done" if jid in self.done \
-                            else "working" if jid in self.working \
-                            else "pending" if jid in self.leafs \
-                            else "errored" if result and not result.IsSuccessfull() \
-                            else "suspended"
-                wait_jobs = map(str, self.waitJobs.get(jid, [])) if self.state == PacketState.WORKABLE else []
+                    else "working" if jid in self.working \
+                    else "pending" if jid in self.leafs \
+                    else "errored" if result and not result.IsSuccessfull() \
+                    else "suspended"
+
+                wait_jobs = []
+                if self.state == PacketState.WORKABLE:
+                    wait_jobs = map(str, self.waitJobs.get(jid, []))
+
+                parents = map(str, job.parents or [])
+                pipe_parents = map(str, job.inputs or [])
+
                 output_filename = None
                 if getattr(job, 'output', None) and os.path.isfile(job.output.name):
                     output_filename = os.path.basename(job.output.name)
-                status["jobs"].append(dict(id=str(job.id), shell=job.shell, desc=job.description, state=state, results=results, output_filename=output_filename, wait_jobs=wait_jobs))
+
+
+                status["jobs"].append(
+                    dict(id=str(job.id),
+                         shell=job.shell,
+                         desc=job.description,
+                         state=state,
+                         results=results,
+                         parents=parents,
+                         pipe_parents=pipe_parents,
+                         output_filename=output_filename,
+                         wait_jobs=wait_jobs,
+                     )
+                )
         return status
-            
+
     def AddBinary(self, binname, file):
         self.AddLink(binname, file)
 
@@ -519,9 +574,14 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
         self.ClearFlag(PacketFlag.USER_SUSPEND)
         self.Resume()
 
+    def GetWorkingJobs(self):
+        with self.lock:
+            working_copy = list(self.working)
+        for jid in working_copy:
+            yield self.jobs[jid]
+
     def KillJobs(self):
-        for job_id in list(self.working):
-            job = self.jobs[job_id]
+        for job in self.GetWorkingJobs():
             job.Terminate()
 
     def Reset(self):
@@ -549,13 +609,8 @@ class JobPacket(Unpickable(lock = PickableRLock.create,
                 tag.Reset()
         self.Reset()
 
-    def GetWorkingJobs(self):
-        with self.lock:
-            working_copy = list(self.working)
-        for jid in working_copy:
-            yield self.jobs[jid]
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in
-# job module.
 import job
+
 job.JobPacket = JobPacket

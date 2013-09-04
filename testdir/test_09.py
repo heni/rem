@@ -6,6 +6,7 @@ import time
 import remclient
 from testdir import *
 
+
 class T09(unittest.TestCase):
     """Race conditions and deadlocks"""
 
@@ -41,26 +42,26 @@ class T09(unittest.TestCase):
 
                 self.signal.wait()
 
-                conn = remclient.Connector(self.remUrl)
+                conn = remclient.Connector(self.remUrl, packet_name_policy=remclient.IGNORE_DUPLICATE_NAMES_POLICY)
                 queue = conn.Queue(self.queue)
-
+                tag = self.tag
                 if self.clientType == 'tag_creator':
                     pack = conn.Packet(
                         'tag_creator.' + tag,
                         time.time(),
-                        wait_tags = [],
-                        set_tag = tag,
-                        notify_emails = self.notifyEmails
+                        wait_tags=[],
+                        set_tag=tag,
+                        notify_emails=self.notifyEmails
                     )
-                    pack.AddJob(shell = 'echo tag_creator')
+                    pack.AddJob(shell='echo tag_creator')
                 elif self.clientType == 'tag_checker':
                     pack = conn.Packet(
                         'tag_checker.' + tag,
                         time.time(),
-                        wait_tags = [tag],
-                        notify_emails = self.notifyEmails
+                        wait_tags=[tag],
+                        notify_emails=self.notifyEmails
                     )
-                    pack.AddJob(shell = 'echo tag_checker')
+                    pack.AddJob(shell='echo tag_checker')
                 else:
                     raise RuntimeError('Undefined clientType field value: %s!' % self.clientType)
 

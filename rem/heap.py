@@ -1,5 +1,7 @@
-class PriorityQueue(object):
+import logging
 
+
+class PriorityQueue(object):
     def __init__(self):
         getattr(super(PriorityQueue, self), "__init__")()
         self.revIndex = {}
@@ -31,9 +33,9 @@ class PriorityQueue(object):
 
     def pushdown(self, i):
         n = len(self.objects)
-        while 2*i + 1 < n:
-            child = 2*i + 1
-            if 2*i + 2 < n and self.values[2*i + 2] < self.values[child]: child = 2*i + 2
+        while 2 * i + 1 < n:
+            child = 2 * i + 1
+            if 2 * i + 2 < n and self.values[2 * i + 2] < self.values[child]: child = 2 * i + 2
             if self.values[i] <= self.values[child]:
                 break
             self.swap(i, child)
@@ -60,7 +62,7 @@ class PriorityQueue(object):
         self.revIndex[object] = pos
         self.rollup(pos)
 
-    def pop(self, obj = None):
+    def pop(self, obj=None):
         f = self.revIndex.get(obj, None) if obj else 0
         if f is None:
             return

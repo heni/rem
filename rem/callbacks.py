@@ -1,8 +1,11 @@
-import weakref, threading, logging, itertools
+import weakref
+import logging
+import itertools
+
 from common import *
 
+
 class ICallbackAcceptor(object):
-    
     def AcceptCallback(self, reference, event):
         methName = "On" + event.title().replace("_", "")
         fn = getattr(self, methName, None)
@@ -10,11 +13,10 @@ class ICallbackAcceptor(object):
             fn(reference)
         else:
             logging.warning("can't invoke %s method for object %s", methName, self)
-       
 
-class CallbackHolder(Unpickable(callbacks = weakref.WeakKeyDictionary,
-                                nonpersistent_callbacks = weakref.WeakKeyDictionary)):
-    
+
+class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
+                                nonpersistent_callbacks=weakref.WeakKeyDictionary)):
     def AddCallbackListener(self, obj):
         if not isinstance(obj, ICallbackAcceptor):
             raise RuntimeError("callback %r\tcan't use object %r as acceptor" % (self, obj))
@@ -55,21 +57,20 @@ class CallbackHolder(Unpickable(callbacks = weakref.WeakKeyDictionary,
 
 
 class Tag(CallbackHolder):
-    
     def __init__(self, tagname):
         CallbackHolder.__init__(self)
         self.done = False
         self.name = tagname
 
     def Set(self):
-        logging.debug("tag %s\tset", self.name)        
+        logging.debug("tag %s\tset", self.name)
         self.done = True
         self.FireEvent("done")
 
     def IsSet(self):
         return self.done
 
-    def Unset(self): 
+    def Unset(self):
         """unset function without event firing"""
         logging.debug("tag %s\tunset", self.name)
         self.done = False
@@ -88,6 +89,9 @@ class Tag(CallbackHolder):
 
     def IsRemote(self):
         return False
+
+    def GetListenersIds(self):
+        return [k.id for k in self.callbacks.iterkeys()]
 
 
 class RemoteTag(Tag):
@@ -116,6 +120,9 @@ class RemoteTag(Tag):
     def IsRemote(self):
         return True
 
+
 """Unpickler helper"""
+
+
 def tagset(st=None):
     return set((v.name if isinstance(v, Tag) else v) for v in st) if st else set()

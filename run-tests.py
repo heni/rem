@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.6
+#!/usr/bin/env python
 
 import logging
 import os
@@ -12,6 +12,7 @@ from ConfigParser import ConfigParser
 sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), "client"))
 import remclient
 import testdir
+
 
 class ClientInfo(object):
     def __init__(self, name, projectDir, hostname):
@@ -28,14 +29,15 @@ class ClientInfo(object):
         self.url = "http://%s:%d" % (hostname, cp.getint("server", "port"))
         self.admin_url = "http://%s:%d" % (hostname, cp.getint("server", "system_port"))
         self.readonly_url = "http://%s:%d" % (hostname, cp.getint("server", "readonly_port"))
-        self.connector = remclient.Connector(self.url, verbose=True)
+        self.connector = remclient.Connector(self.url, verbose=True, packet_name_policy=remclient.PCK_DUPLICATE_NAME_IGNORE)
         self.admin_connector = remclient.AdminConnector(self.admin_url, verbose=True)
-        self.readonly_connector = remclient.Connector(self.readonly_url, verbose=True)
+        self.readonly_connector = remclient.Connector(self.readonly_url, verbose=True, packet_name_policy=remclient.PCK_DUPLICATE_NAME_IGNORE)
 
     def LoadConfiguration(self, config_path, tmpdir):
         if config_path.startswith("svn+ssh://"):
             config_temporary_path = os.path.join(tmpdir, os.path.basename(config_path))
-            subprocess.check_call(["svn", "export", "--force", "--non-interactive", "-q", config_path, config_temporary_path])
+            subprocess.check_call(
+                ["svn", "export", "--force", "--non-interactive", "-q", config_path, config_temporary_path])
         elif config_path.startswith("local://"):
             config_temporary_path = config_path[8:]
             self.path = os.path.dirname(config_temporary_path)
@@ -50,22 +52,11 @@ class ClientInfo(object):
 
 class Configuration(object):
     @classmethod
-    def GetBubenConfig(cls):
-        config = cls()
-        config.server1 = ClientInfo("buben-4", "svn+ssh://arcadia.yandex.ru/arc/trunk/data/robust-executor/configs/searchdata/bubenj4", "bubenj4")
-        config.server2 = ClientInfo("buben-5", "svn+ssh://arcadia.yandex.ru/arc/trunk/data/robust-executor/configs/searchdata/bubenj5", "bubenj5")
-        config.notify_email = "ekrokhalev@yandex-team.ru"
-        return config
-
-    @classmethod
     def GetLocalConfig(cls):
         config = cls()
         config.server1 = ClientInfo("local-01", "local://.", "localhost")
         config.server2 = ClientInfo("local-02", "local://../rem2/", "localhost")
-        config.notify_email = "ekrokhalev@yandex-team.ru"
-        #config.server1 = ClientInfo("local-01", "/home/yuliy/rem1", "localhost")
-        #config.server2 = ClientInfo("local-02", "/home/yuliy/rem2", "localhost")
-        #config.notify_email = "yuliy@yandex-team.ru"
+        config.notify_email = "eugene.krokhalev@gmail.com"
         return config
 
     @staticmethod
@@ -91,11 +82,11 @@ class Configuration(object):
         path2 = getattr(getattr(self, "server2", None), "path", None)
         if path1 and path2:
             with testdir.common.ServiceTemporaryShutdown(path2):
-                self.__sync_dir(path1, path2, ["client", "rem", "rem-server.py", "start-stop-daemon.py", "setup_env.sh", "network_topology.cfg"])
+                self.__sync_dir(path1, path2, ["client", "rem", "rem-server.py", "start-stop-daemon.py", "setup_env.sh",
+                                               "network_topology.cfg"])
 
 
 if __name__ == "__main__":
-    # config = Configuration.GetBubenConfig()
     config = Configuration.GetLocalConfig()
     testdir.setUp(config, "userdata")
     unittest.TestProgram(module=testdir)

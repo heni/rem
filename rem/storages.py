@@ -1,18 +1,27 @@
 from __future__ import with_statement
-import itertools, logging, os, sys, time, weakref, copy
-import bsddb3, cPickle
+import logging
+import os
+import sys
+import threading
+import time
+import weakref
+import bsddb3
+import cPickle
 
 from common import *
-from callbacks import Tag, RemoteTag, ICallbackAcceptor
+from callbacks import Tag, RemoteTag
 from journal import TagLogger
+from callbacks import ICallbackAcceptor
+from packet import PacketState, JobPacket
+
 
 __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
 
 
 class GlobalPacketStorage(object):
-    
     def __init__(self):
         self.box = weakref.WeakValueDictionary()
+        self.iteritems = self.box.iteritems
 
     def add(self, pck):
         self.box[pck.id] = pck
@@ -20,16 +29,25 @@ class GlobalPacketStorage(object):
     def update(self, list):
         map(self.add, list)
 
+    def __getitem__(self, item):
+        return self.box[item]
+
+    def __setitem__(self, key, value):
+        self.box[key] = value
+
+    def keys(self):
+        return self.box.keys()
+
     Add = add
 
     def GetPacket(self, id):
         return self.box.get(id)
 
 
-class ShortStorage(Unpickable(packets = (TimedMap.create, {}), 
-                              lock = PickableLock.create)):
+class ShortStorage(Unpickable(packets=(TimedMap.create, {}),
+                              lock=PickableLock.create)):
     PCK_LIFETIME = 1800
-    
+
     def __getstate__(self):
         self.forgetOldItems()
         sdict = self.__dict__.copy()
@@ -62,7 +80,7 @@ class ShortStorage(Unpickable(packets = (TimedMap.create, {}),
             return self.packets.pop(id)[1][1]
 
 
-class BinaryStorage(Unpickable(files = dict, lifeTime = (int, 3600), binDirectory=str)):
+class BinaryStorage(Unpickable(files=dict, lifeTime=(int, 3600), binDirectory=str)):
     digest_length = 32
 
     def __init__(self):
@@ -75,7 +93,7 @@ class BinaryStorage(Unpickable(files = dict, lifeTime = (int, 3600), binDirector
         return getattr(super(BinaryStorage, self), "__getstate__", lambda: sdict)()
 
     @classmethod
-    def create(cls, o = None):
+    def create(cls, o=None):
         if o is None:
             return cls()
         if isinstance(o, BinaryStorage):
@@ -142,7 +160,7 @@ class BinaryStorage(Unpickable(files = dict, lifeTime = (int, 3600), binDirector
             tmpfile = None
             self.RegisterFile(BinaryFile(remPath, checksum, True))
         finally:
-            if tmpfile != None:
+            if tmpfile is not None:
                 os.unlink(tmpfile)
         return True
 
@@ -153,6 +171,7 @@ class BinaryStorage(Unpickable(files = dict, lifeTime = (int, 3600), binDirector
 
 class TagWrapper(object):
     __slots__ = ["inner", "__reduce_ex__"]
+
     def __init__(self, tag):
         self.inner = tag
 
@@ -231,7 +250,7 @@ class TagStorage(object):
     def ListTags(self, name_regex=None, prefix=None, memory_only=True):
         for name, tag in self.inmem_items.iteritems():
             if name and (not prefix or name.startswith(prefix)) \
-                    and (not name_regex or name_regex.match(name)):
+                and (not name_regex or name_regex.match(name)):
                 yield name, tag.IsSet()
         if memory_only:
             return
@@ -260,6 +279,9 @@ class TagStorage(object):
     def Restore(self):
         self.tag_logger.Restore()
 
+    def ListDependentPackets(self, tag_name):
+        return self.RawTag(tag_name).GetListenersIds()
+
     def tofileOldItems(self):
         old_tags = set()
         for name, tag in self.inmem_items.items():
@@ -272,4 +294,43 @@ class TagStorage(object):
                 tag.callbacks.clear()
                 self.infile_items[name] = cPickle.dumps(tag)
             self.infile_items.sync()
+
+
+class PacketNamesStorage(ICallbackAcceptor):
+    def __init__(self, *args, **kwargs):
+        self.names = set(kwargs.get('names_list', []))
+        self.lock = threading.Lock()
+
+    def __getstate__(self):
+        return {}
+
+    def Add(self, pck_name):
+        with self.lock:
+            self.names.add(pck_name)
+
+    def Update(self, names_list=None):
+        with self.lock:
+            self.names.update(names_list or [])
+
+    def Exist(self, pck_name):
+        exist = False
+        with self.lock:
+            exist = pck_name in self.names
+        return exist
+
+    def Delete(self, pck_name):
+        with self.lock:
+            if pck_name in self.names:
+                self.names.remove(pck_name)
+
+    def OnChange(self, packet_ref):
+        if isinstance(packet_ref, JobPacket) and packet_ref.state == PacketState.HISTORIED:
+            self.Delete(packet_ref.name)
+
+    def OnJobDone(self, job_ref):
+        pass
+
+    def OnJobGet(self, job_ref):
+        pass
+
 

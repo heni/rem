@@ -1,13 +1,13 @@
-import logging
 import unittest
 import rem
 
 
 class T07(unittest.TestCase):
     """Checking internal REM structures"""
-  
+
     def testTagWrapperSerialization(self):
         import cPickle
+
         tag = rem.Tag("test")
         wrapOrig = rem.storages.TagWrapper(tag)
         wrapDesc = cPickle.dumps(wrapOrig)

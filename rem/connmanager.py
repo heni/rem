@@ -1,6 +1,4 @@
 import threading
-import time
-import random
 import xmlrpclib
 import select
 import bsddb3
@@ -10,14 +8,13 @@ import cPickle
 import subprocess
 
 from common import *
-from callbacks import Tag, RemoteTag, ICallbackAcceptor
+from callbacks import Tag, ICallbackAcceptor
 
 
-
-class ClientInfo(Unpickable(taglist = set,
-                            subscriptions = set,
-                            errorsCnt = (int, 0),
-                            active = (bool, True))):
+class ClientInfo(Unpickable(taglist=set,
+                            subscriptions=set,
+                            errorsCnt=(int, 0),
+                            active=(bool, True))):
     MAX_TAGS_BULK = 100
     PENALTY_FACTOR = 6
 
@@ -80,7 +77,8 @@ class TopologyInfo(Unpickable(servers=dict, location=str)):
         tmp_dir = tempfile.mkdtemp(dir=".", prefix="network-topology")
         try:
             config_temporary_path = os.path.join(tmp_dir, os.path.split(location)[1])
-            subprocess.check_call(["svn", "export", "--force", "--non-interactive", "-q", location, config_temporary_path])
+            subprocess.check_call(
+                ["svn", "export", "--force", "--non-interactive", "-q", location, config_temporary_path])
             return cls.ReadConfigFromFile(config_temporary_path)
         finally:
             if os.path.isdir(tmp_dir):
@@ -90,7 +88,7 @@ class TopologyInfo(Unpickable(servers=dict, location=str)):
     def ReadConfigFromFile(cls, filename):
         configParser = ConfigParser()
         assert filename in configParser.read(filename), \
-                "error in network topology file %s" % filename
+            "error in network topology file %s" % filename
         return configParser.items("servers")
 
     def Update(self, data):
@@ -118,7 +116,6 @@ class ConnectionManager(Unpickable(topologyInfo=TopologyInfo,
                                    alive=(bool, False),
                                    tags_file=str),
                         ICallbackAcceptor):
-
     def InitXMLRPCServer(self):
         self.rpcserver = SimpleXMLRPCServer(("", self.port), allow_none=True)
         self.rpcserver.register_function(self.set_tags, "set_tags")
@@ -148,8 +145,8 @@ class ConnectionManager(Unpickable(topologyInfo=TopologyInfo,
     def Start(self):
         if not self.network_name or not self.tags_file or not self.port:
             logging.warning("ConnectionManager could'n start: wrong configuration. " +
-                    "network_name: %s, remote_tags_db_file: %s, system_port: %r",
-                    self.network_name, self.tags_file, self.port)
+                            "network_name: %s, remote_tags_db_file: %s, system_port: %r",
+                            self.network_name, self.tags_file, self.port)
             return
         self.ReloadConfig()
         self.alive = True
@@ -273,13 +270,13 @@ class ConnectionManager(Unpickable(topologyInfo=TopologyInfo,
     def list_clients(self):
 
         return [{"name": client.name,
-                "url": client.url,
-                "systemUrl": client.systemUrl,
-                "active": client.active,
-                "errorsCount": client.errorsCnt,
-                "tagsCount": len(client.taglist),
-                "subscriptionsCount": len(client.subscriptions),
-                "lastError": str(client.lastError)} for client in self.topologyInfo.servers.values()]
+                 "url": client.url,
+                 "systemUrl": client.systemUrl,
+                 "active": client.active,
+                 "errorsCount": client.errorsCnt,
+                 "tagsCount": len(client.taglist),
+                 "subscriptionsCount": len(client.subscriptions),
+                 "lastError": str(client.lastError)} for client in self.topologyInfo.servers.values()]
 
     @traced_rpc_method()
     def list_tags(self, name_prefix):
@@ -320,13 +317,13 @@ class ConnectionManager(Unpickable(topologyInfo=TopologyInfo,
     def get_client_info(self, clientname):
         client = self.topologyInfo.GetClient(clientname)
         res = {"name": client.name,
-                "url": client.url,
-                "systemUrl": client.systemUrl,
-                "active": client.active,
-                "errorsCount": client.errorsCnt,
-                "deferedTagsCount": len(client.taglist),
-                "subscriptionsCount": len(client.subscriptions),
-                "lastError": str(client.lastError)}
+               "url": client.url,
+               "systemUrl": client.systemUrl,
+               "active": client.active,
+               "errorsCount": client.errorsCnt,
+               "deferedTagsCount": len(client.taglist),
+               "subscriptionsCount": len(client.subscriptions),
+               "lastError": str(client.lastError)}
         return res
 
     @traced_rpc_method()

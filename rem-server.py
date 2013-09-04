@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 from __future__ import with_statement
-import cStringIO
 import logging
-import os, re
-import select, signal, sys
+import os
+import re
+import select
+import signal
+import sys
+import socket
 import time
 import threading
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
@@ -11,6 +14,12 @@ from SocketServer import ThreadingMixIn
 import Queue as StdQueue
 
 from rem import *
+
+
+class DuplicatePackageNameException(Exception):
+    def __init__(self, pck_name, serv_name, *args, **kwargs):
+        super(DuplicatePackageNameException, self).__init__(*args, **kwargs)
+        self.message = 'DuplicatePackageNameException: Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
 
 
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
@@ -45,19 +54,20 @@ class AuthRequestHandler(SimpleXMLRPCRequestHandler):
 _scheduler = None
 _context = None
 
-def CreateScheduler(context, canBeClear = False):
+
+def CreateScheduler(context, canBeClear=False):
     sched = Scheduler(context)
     wasRestoreTry = False
     if os.path.isdir(context.backup_directory):
-        for name in sorted(os.listdir(context.backup_directory), reverse = True):
+        for name in sorted(os.listdir(context.backup_directory), reverse=True):
             if sched.CheckBackupFilename(name):
                 backupFile = os.path.join(context.backup_directory, name)
                 try:
                     with open(backupFile, "r") as backupReader:
                         sched.Deserialize(backupReader)
                     return sched
-                except:
-                    logging.exception("can't restore from file \"%s\"", backupFile)
+                except Exception, e:
+                    logging.exception("can't restore from file \"%s\" : %s", backupFile, e)
                     wasRestoreTry = True
     if wasRestoreTry and not canBeClear:
         raise RuntimeError("can't restore from backup")
@@ -70,39 +80,50 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY):
+    if packet_name_policy & constants.DENY_DUPLICATE_NAMES_POLICY and _scheduler.packetNames.Exist(packet_name):
+        ex = DuplicatePackageNameException(packet_name, _context.network_name)
+        raise xmlrpclib.Fault(1, ex.message)
     if notify_emails is not None:
         assert isinstance(notify_emails, list), "notify_emails must be list or None"
         for email in notify_emails:
             assert CheckEmailAddress(email), "incorrect e-mail: " + email
     wait_tags = [_scheduler.tagRef.AcquireTag(tagname) for tagname in wait_tagnames]
     pck = JobPacket(packet_name, priority, _context, notify_emails,
-        wait_tags = wait_tags, set_tag = _scheduler.tagRef.AcquireTag(set_tag))
+                    wait_tags=wait_tags, set_tag=_scheduler.tagRef.AcquireTag(set_tag),
+                    kill_all_jobs_on_error=kill_all_jobs_on_error)
     for tag in wait_tags:
         _scheduler.connManager.Subscribe(tag)
     _scheduler.tempStorage.StorePacket(pck)
     logging.info('packet %s registered as %s', packet_name, pck.id)
     return pck.id
 
+
 @traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
-                max_err_len=None, retry_delay=None, pipe_fail=False, description=""):
+                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
         parents = [pck.jobs[int(jid)] for jid in parents]
         pipe_parents = [pck.jobs[int(jid)] for jid in pipe_parents]
         job = pck.Add(shell, parents, pipe_parents, _scheduler.tagRef.AcquireTag(set_tag), tries, \
-                      max_err_len, retry_delay, pipe_fail, description)
+                      max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time)
         return str(job.id)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
+
 @traced_rpc_method("info")
-def pck_addto_queue(pck_id, queue_name):
+def pck_addto_queue(pck_id, queue_name, packet_name_policy):
     pck = _scheduler.tempStorage.PickPacket(pck_id)
+    packet_name = pck.name
+    if packet_name_policy & (constants.DENY_DUPLICATE_NAMES_POLICY | constants.WARN_DUPLICATE_NAMES_POLICY) and _scheduler.packetNames.Exist(packet_name):
+        ex = DuplicatePackageNameException(packet_name, _context.network_name)
+        raise xmlrpclib.Fault(1, ex.message)
     if pck is not None:
         _scheduler.RegisterPacket(queue_name, pck)
         return
     raise AttributeError("nonexisted packet id: %s" % pck_id)
+
 
 @traced_rpc_method("info")
 def pck_moveto_queue(pck_id, src_queue, dst_queue):
@@ -115,37 +136,51 @@ def pck_moveto_queue(pck_id, src_queue, dst_queue):
         return
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
+
 @readonly_method
 @traced_rpc_method()
 def check_tag(tagname):
     return _scheduler.tagRef.CheckTag(tagname)
 
+
 @traced_rpc_method("info")
 def set_tag(tagname):
     return _scheduler.tagRef.SetTag(tagname)
 
+
 @traced_rpc_method("info")
 def unset_tag(tagname):
     return _scheduler.tagRef.UnsetTag(tagname)
+
 
 @traced_rpc_method()
 def reset_tag(tagname):
     tag = _scheduler.tagRef.AcquireTag(tagname)
     tag.Reset()
 
+
+@readonly_method
+@traced_rpc_method()
+def get_dependent_packets_for_tag(tagname):
+    return _scheduler.tagRef.ListDependentPackets(tagname)
+
+
 @traced_rpc_method("info")
 def queue_suspend(queue_name):
     _scheduler.Queue(queue_name).Suspend()
 
+
 @traced_rpc_method("info")
 def queue_resume(queue_name):
     _scheduler.Queue(queue_name).Resume()
+
 
 @readonly_method
 @traced_rpc_method()
 def queue_status(queue_name):
     q = _scheduler.Queue(queue_name, create=False)
     return q.Status()
+
 
 @readonly_method
 @traced_rpc_method()
@@ -154,19 +189,23 @@ def queue_list(queue_name, filter, name_regex=None, prefix=None):
     q = _scheduler.Queue(queue_name, create=False)
     return [pck.id for pck in q.ListPackets(filter=filter, name_regex=name_regex, prefix=prefix)]
 
+
 @readonly_method
 @traced_rpc_method()
 def queue_list_updated(queue_name, last_modified, filter=None):
     q = _scheduler.Queue(queue_name, create=False)
     return [pck.id for pck in q.ListPackets(last_modified=last_modified, filter=filter)]
 
+
 @traced_rpc_method("info")
 def queue_change_limit(queue_name, limit):
     _scheduler.Queue(queue_name).ChangeWorkingLimit(limit)
 
+
 @traced_rpc_method("info")
 def queue_delete(queue_name):
     return _scheduler.DeleteUnusedQueue(queue_name)
+
 
 @readonly_method
 @traced_rpc_method()
@@ -174,18 +213,21 @@ def list_tags(name_regex=None, prefix=None, memory_only=True):
     name_regex = name_regex and re.compile(name_regex)
     return list(set(_scheduler.tagRef.ListTags(name_regex, prefix, memory_only)))
 
+
 @readonly_method
 @traced_rpc_method()
 def list_queues(name_regex=None, prefix=None, *args):
     name_regex = name_regex and re.compile(name_regex)
     return [(q.name, q.Status()) for q in _scheduler.qRef.itervalues()
             if (not name_regex or name_regex.match(q.name)) and \
-                (not prefix or q.name.startswith(prefix))]
+               (not prefix or q.name.startswith(prefix))]
+
 
 @readonly_method
 @traced_rpc_method()
 def list_schedule(*args):
     return _scheduler.schedWatcher.ListTasks()
+
 
 @readonly_method
 @traced_rpc_method()
@@ -195,6 +237,7 @@ def pck_status(pck_id):
         return pck.Status()
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
+
 @traced_rpc_method("info")
 def pck_suspend(pck_id, kill_jobs=False):
     pck = _scheduler.GetPacket(pck_id)
@@ -202,12 +245,14 @@ def pck_suspend(pck_id, kill_jobs=False):
         return pck.UserSuspend(kill_jobs)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
+
 @traced_rpc_method("info")
 def pck_resume(pck_id):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
         return pck.UserResume()
     raise AttributeError("nonexisted packet id: %s" % pck_id)
+
 
 @traced_rpc_method("info")
 def pck_delete(pck_id):
@@ -217,6 +262,7 @@ def pck_delete(pck_id):
             raise AssertionError("couldn't delete packet '%s' stated as '%s'" % (pck_id, pck.state))
         return pck.changeState(PacketState.HISTORIED)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
+
 
 @traced_rpc_method("info")
 def pck_reset(pck_id):
@@ -228,13 +274,16 @@ def pck_reset(pck_id):
         return result
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
+
 @traced_rpc_method()
 def check_binary_exist(checksum):
     return _scheduler.binStorage.HasBinary(checksum)
 
+
 @traced_rpc_method("info")
 def save_binary(bindata):
     _scheduler.binStorage.CreateFile(bindata.data)
+
 
 @traced_rpc_method("info")
 def check_binary_and_lock(checksum, localPath, tryLock=None):
@@ -243,6 +292,7 @@ def check_binary_and_lock(checksum, localPath, tryLock=None):
             or _scheduler.binStorage.CreateFileLocal(localPath, checksum)
     else:
         raise NotImplementedError('tryLock==True branch is not implemented yet!')
+
 
 @traced_rpc_method()
 def pck_add_binary(pck_id, binname, checksum):
@@ -253,6 +303,7 @@ def pck_add_binary(pck_id, binname, checksum):
         return
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
+
 @readonly_method
 @traced_rpc_method()
 def pck_list_files(pck_id):
@@ -261,6 +312,7 @@ def pck_list_files(pck_id):
         files = pck.ListFiles()
         return files
     raise AttributeError("nonexisted packet id: %s" % pck_id)
+
 
 @readonly_method
 @traced_rpc_method()
@@ -271,17 +323,19 @@ def pck_get_file(pck_id, filename):
         return xmlrpclib.Binary(file)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
+
 class RemServer(object):
     def __init__(self, port, poolsize, scheduler, readonly=False):
         self.scheduler = scheduler
         self.readonly = readonly
-        self.rpcserver = AsyncXMLRPCServer(poolsize, ("", port), AuthRequestHandler, allow_none = True)
+        self.rpcserver = AsyncXMLRPCServer(poolsize, ("", port), AuthRequestHandler, allow_none=True)
         self.rpcserver.register_multicall_functions()
         self.register_all_functions()
 
     def _non_readonly_func_stub(self, name):
         def stub(*args, **kwargs):
             raise NotImplementedError('Function %s is not available in readonly interface' % name)
+
         return stub
 
     def register_function(self, func, name):
@@ -301,6 +355,7 @@ class RemServer(object):
         self.register_function(set_tag, "set_tag")
         self.register_function(unset_tag, "unset_tag")
         self.register_function(reset_tag, "reset_tag")
+        self.register_function(get_dependent_packets_for_tag, "get_dependent_packets_for_tag")
         self.register_function(queue_suspend, "queue_suspend")
         self.register_function(queue_resume, "queue_resume")
         self.register_function(queue_status, "queue_status")
@@ -332,7 +387,7 @@ class RemServer(object):
 
     def start(self):
         self.xmlrpcworkers = [XMLRPCWorker(self.rpcserver.requests, self.rpcserver.process_request_thread)
-            for _ in xrange(self.rpcserver.poolsize)]
+                              for _ in xrange(self.rpcserver.poolsize)]
         self.alive = True
         self.main_thread = threading.Thread(target=self.request_processor)
         for worker in self.xmlrpcworkers:
@@ -350,7 +405,7 @@ class RemDaemon(object):
         self.api_servers = [RemServer(context.manager_port, context.xmlrpc_pool_size, scheduler)]
         if context.manager_readonly_port:
             self.api_servers.append(RemServer(context.manager_readonly_port,
-                context.readonly_xmlrpc_pool_size, scheduler, readonly=True))
+                                              context.readonly_xmlrpc_pool_size, scheduler, readonly=True))
         self.regWorkers = []
         self.timeWorker = None
 
@@ -362,8 +417,8 @@ class RemDaemon(object):
             if time.time() > nextBackupTime:
                 try:
                     self.scheduler.RollBackup()
-                except:
-                    logging.exception("rem-server\tbackup error")
+                except Exception, e:
+                    logging.exception("rem-server\tbackup error : %s", e)
                 finally:
                     nextBackupTime = time.time() + self.scheduler.backupPeriod
             time.sleep(TIMEOUT)
@@ -377,7 +432,7 @@ class RemDaemon(object):
                 server.stop()
             if self.timeWorker:
                 self.timeWorker.Kill()
-            # stop scheduler
+                # stop scheduler
             self.scheduler.Stop()
             #suspend workers before killing them (to avoid restarting of killed pids)
             map(lambda worker: worker.Suspend(), self.regWorkers)
@@ -406,14 +461,12 @@ class RemDaemon(object):
         #start xmlrpc server
         for server in self.api_servers:
             server.start()
-        #main cycle for backups
+            #main cycle for backups
         self.process_backups()
         #final backup
         while not self.permitFinalBackup:
             time.sleep(0.01)
         self.scheduler.RollBackup()
-
-
 
 
 def scheduler_test():
@@ -432,9 +485,10 @@ def scheduler_test():
     print_tags(_scheduler)
     qname = "userdata"
     print list_queues()
+    pendingLength = workedLength = suspendLength = 0
     if qname in _scheduler.qRef:
         pendingLength = len(_scheduler.qRef[qname].pending)
-        workedLength  = len(_scheduler.qRef[qname].worked)
+        workedLength = len(_scheduler.qRef[qname].worked)
         suspendLength = len(_scheduler.qRef[qname].suspended)
         for pck_id in queue_list(qname, "waiting"):
             pck_suspend(pck_id)
@@ -449,11 +503,12 @@ def scheduler_test():
     #print memory usage statistics
     try:
         import guppy
+
         mem = guppy.hpy()
         print mem.heap()
     except:
         logging.exception("guppy error")
-    #deserialize backward attempt
+        #deserialize backward attempt
     with open("data.bin", "r") as buf:
         stTime = time.time()
         tmpContext = DefaultContext("copy")

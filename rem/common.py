@@ -5,12 +5,16 @@ import hashlib
 import logging
 import os
 import shutil
-import tempfile, threading, time, types
+import tempfile
+import threading
+import time
+import types
 import re
 import xmlrpclib
 
 from heap import PriorityQueue
 import osspec
+
 
 def logged(func):
     def f(*args):
@@ -22,11 +26,14 @@ def logged(func):
         res = func(*args)
         logging.debug("function \"%s(%s)\" finished", func.func_name, argStr)
         return res
+
     return f
+
 
 def traced_rpc_method(level="debug"):
     log_method = getattr(logging, level)
     assert callable(log_method)
+
     def traced_rpc_method(func):
         def f(*args):
             try:
@@ -34,16 +41,24 @@ def traced_rpc_method(level="debug"):
             except:
                 logging.exception("")
                 raise
+
         f.log_level = level
         return f
+
     return traced_rpc_method
 
+
 class FakeObjectRegistrator(object):
-    def register(self, obj, sdict): pass
-    def LogStats(self): pass
+    def register(self, obj, sdict):
+        pass
+
+    def LogStats(self):
+        pass
+
 
 class ObjectRegistrator(object):
     TOP_SZ = 10
+
     def __init__(self):
         self.sum_size = 0
         self.max_objects = []
@@ -52,7 +67,8 @@ class ObjectRegistrator(object):
         self.tpCache = {}
 
     def register(self, obj, sdict):
-        self.szCache[id(obj)] = fullSz = sum(len(k) + self.szCache.get(id(obj), object.__sizeof__(obj)) for k, obj in sdict.iteritems())
+        self.szCache[id(obj)] = fullSz = sum(
+            len(k) + self.szCache.get(id(obj), object.__sizeof__(obj)) for k, obj in sdict.iteritems())
         smallSz = object.__sizeof__(sdict)
         self.sum_size += smallSz
         self.count += 1
@@ -65,9 +81,10 @@ class ObjectRegistrator(object):
         self.tpCache[tp][1] += smallSz
 
     def LogStats(self):
-        logging.debug("summary deserialization objects size: %s(%s objects)\nmore huge objects: %s\nby types: %s", 
-            self.sum_size, self.count, self.max_objects, self.tpCache)
-        
+        logging.debug("summary deserialization objects size: %s(%s objects)\nmore huge objects: %s\nby types: %s",
+                      self.sum_size, self.count, self.max_objects, self.tpCache)
+
+
 ObjectRegistrator_ = FakeObjectRegistrator()
 
 
@@ -82,11 +99,12 @@ def Unpickable(**kws):
                 self.defargs = desc[1] if len(desc) == 2 and isinstance(desc[1], tuple) else desc[1:]
             else:
                 raise RuntimeError("incorrect unpickle plan: %r" % desc)
+
         def __call__(self, *args):
             if args:
                 return self.fn(*args)
             return self.fn(*self.defargs)
-        
+
     class ObjUnpickler(object):
         def __setstate__(self, sdict):
             for attr, builder in scheme.iteritems():
@@ -105,13 +123,14 @@ def Unpickable(**kws):
         def __init__(self, obj=None):
             if obj is not None:
                 self.__dict__ = obj.__dict__.copy()
-            else:                
+            else:
                 for attr, builder in scheme.iteritems():
                     setattr(self, attr, builder())
             getattr(super(ObjUnpickler, self), "__init__")()
 
     scheme = dict((attr, ObjBuilder(desc)) for attr, desc in kws.iteritems())
-    return ObjUnpickler 
+    return ObjUnpickler
+
 
 def Pickable(fields_to_copy):
     class PickableClass(object):
@@ -123,32 +142,45 @@ def Pickable(fields_to_copy):
                 elif isinstance(sdict[k], list):
                     sdict[k] = sdict[k][:]
             return sdict
+
     return PickableClass
 
 
 """set of unpickable helpers"""
+
+
 def runtime_object(init_value):
     """object with value equal to init_value after each deserialization (for living at run-time objects)"""
+
     def _constructor(*args):
         return copy.deepcopy(init_value)
+
     return _constructor
+
 
 def emptyset(*args):
     return set()
 
+
+def zeroint(*args):
+    return int()
+
+
 class nullobject(object):
     __instance = None
+
     def __new__(cls, *args):
         if cls.__instance is None:
             cls.__instance = object.__new__(cls, *args)
         return cls.__instance
+
     def __init__(self, *args):
         pass
 
 
-class PickableLock(Unpickable(_object = threading.Lock)):
+class PickableLock(Unpickable(_object=threading.Lock)):
     @classmethod
-    def create(cls, o = None):
+    def create(cls, o=None):
         if isinstance(o, cls):
             return o
         return cls()
@@ -166,9 +198,9 @@ class PickableLock(Unpickable(_object = threading.Lock)):
         return {}
 
 
-class PickableRLock(Unpickable(_object = threading.RLock)):
+class PickableRLock(Unpickable(_object=threading.RLock)):
     @classmethod
-    def create(cls, o = None):
+    def create(cls, o=None):
         if isinstance(o, cls):
             return o
         return cls()
@@ -187,25 +219,29 @@ class PickableRLock(Unpickable(_object = threading.RLock)):
 
 
 """Legacy structs for correct deserialization from old backups"""
+
+
 class PickableLocker(object): pass
+
+
 NullObject = nullobject
 
-
-
 """Usefull sets based on PriorityQueue"""
-class TimedSet(PriorityQueue, Unpickable(lock = PickableLock)):
+
+
+class TimedSet(PriorityQueue, Unpickable(lock=PickableLock)):
     def __init__(self):
-        getattr(super(TimedSet, self), "__init__")()
+        super(TimedSet, self).__init__()
 
     @classmethod
-    def create(cls, list = []):
+    def create(cls, list=None):
         if isinstance(list, cls):
             return list
         obj = cls()
-        map(obj.add, list)
+        map(obj.add, list or [])
         return obj
 
-    def add(self, obj, tm = None):
+    def add(self, obj, tm=None):
         if isinstance(obj, tuple):
             obj, tm = obj
         if obj not in self:
@@ -232,7 +268,8 @@ class TimedSet(PriorityQueue, Unpickable(lock = PickableLock)):
 
 class TimedMap(PriorityQueue):
     @classmethod
-    def create(cls, dct = {}):
+    def create(cls, dct=None):
+        if not dct: dct = {}
         if isinstance(dct, cls):
             return dct
         obj = cls()
@@ -240,28 +277,33 @@ class TimedMap(PriorityQueue):
             obj.add(key, value)
         return obj
 
-    def add(self, obj, value, tm = None):
+    def add(self, obj, value, tm=None):
         if obj not in self:
             PriorityQueue.add(self, obj, (tm or time.time(), value))
 
     def remove(self, obj):
         return self.pop(obj)
 
+
 def GeneralizedSet(priorAttr):
     class _packset(PriorityQueue):
         @classmethod
-        def create(cls, list = []):
+        def create(cls, list=None):
             if isinstance(list, cls):
                 return list
             obj = cls()
-            map(obj.add, list)
+            map(obj.add, list or [])
             return obj
+
         def add(self, pck):
             if pck not in self:
                 PriorityQueue.add(self, pck, getattr(pck, priorAttr, 0))
+
         def remove(self, obj):
             return self.pop(obj)
+
     return _packset
+
 
 class PackSet(GeneralizedSet("priority")): pass
 
@@ -269,7 +311,7 @@ class PackSet(GeneralizedSet("priority")): pass
 class FuncRunner(object):
     """simple function running object with cPickle support
     WARNING: this class works only with pure function and nondynamic class methods"""
-    
+
     def __init__(self, fn, args, kws):
         self.object = None
         if isinstance(fn, types.MethodType):
@@ -293,8 +335,8 @@ class FuncRunner(object):
 
 
 class BinaryFile(Unpickable(
-                    links = dict, 
-                    lock = PickableRLock.create)):
+    links=dict,
+    lock=PickableRLock.create)):
     BUF_SIZE = 256 * 1024
 
     @classmethod
@@ -321,7 +363,7 @@ class BinaryFile(Unpickable(
                 cs_calc.update(buff)
             return cs_calc.hexdigest()
 
-    def __init__(self, path, checksum = None, set_rx_flag = False):
+    def __init__(self, path, checksum=None, set_rx_flag=False):
         assert os.path.isfile(path)
         if set_rx_flag:
             osspec.set_common_readable(path)
@@ -353,7 +395,7 @@ class BinaryFile(Unpickable(
             self.Unlink(pck, name)
         with self.lock:
             self.links[(pck.id, name)] = dstname
-            osspec.create_symlink(self.path, dstname, reallocate = False)
+            osspec.create_symlink(self.path, dstname, reallocate=False)
             self.accessTime = time.time()
 
     def Unlink(self, pck, name):
@@ -364,7 +406,7 @@ class BinaryFile(Unpickable(
                 self.accessTime = time.time()
                 if os.path.islink(dstname):
                     os.unlink(dstname)
-    
+
     def Relink(self, estimated_path):
         with self.lock:
             self.path = estimated_path
@@ -373,7 +415,7 @@ class BinaryFile(Unpickable(
                 if not os.path.isdir(dstdir):
                     logging.warning("binfile\tcan't relink nonexisted packet data %s", dstdir)
                 elif os.path._resolve_link(dstname) != self.path:
-                    osspec.create_symlink(self.path, dstname, reallocate = True)
+                    osspec.create_symlink(self.path, dstname, reallocate=True)
 
 
 def safeStringEncode(str):
@@ -381,12 +423,14 @@ def safeStringEncode(str):
 
 
 CheckEmailRe = re.compile("[\w._-]+@[\w_-]+\.[\w._-]+$")
+
+
 def CheckEmailAddress(email):
     if isinstance(email, str) and CheckEmailRe.match(email):
         return True
     return False
 
-    
+
 def SendEmail(emails, msg_helper):
     if msg_helper:
         return osspec.send_email(emails, msg_helper.subject(), msg_helper.message())

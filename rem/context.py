@@ -1,5 +1,10 @@
-import logging, logging.handlers, os, time
+import logging
+import logging.handlers
+import os
+import time
 from ConfigParser import ConfigParser, NoOptionError
+import codecs
+
 
 class StableRotateFileHandler(logging.handlers.TimedRotatingFileHandler):
     REOPEN_TM = 60
@@ -38,16 +43,15 @@ class ConfigReader(ConfigParser):
         except NoOptionError:
             return default
 
-    def safe_getlist(self, section, option, default=[]):
+    def safe_getlist(self, section, option, default=None):
         try:
             value = self.get(section, option)
             return [item.strip() for item in value.split(",") if item.strip()]
         except NoOptionError:
-            return default
+            return default or []
 
 
 class Context(object):
-
     @classmethod
     def prep_dir(cls, dir_name):
         dir_name = os.path.abspath(dir_name)
@@ -88,12 +92,12 @@ class Context(object):
 
     def initLogger(self, config, isTestMode):
         logLevel = logging.DEBUG if isTestMode \
-                    else getattr(logging, config.get("log", "warnlevel").upper())
+            else getattr(logging, config.get("log", "warnlevel").upper())
         logger = logging.getLogger()
         if not isTestMode:
             logHandler = StableRotateFileHandler(
                 os.path.join(self.logs_directory, config.get("log", "filename")),
-                when = "midnight", backupCount = config.getint("log", "rollcount"))
+                when="midnight", backupCount=config.getint("log", "rollcount"))
             logHandler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(module)s:\t%(message)s"))
             logger.addHandler(logHandler)
         logger.setLevel(logLevel)
