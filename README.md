@@ -6,4 +6,4 @@ Maintainers:
 * Yuliy Ayvazyan (yuliy@yandex-team.ru) 
  
 
-[Wiki Documentation Link](https://github.com/heni/rem/wiki)
+[Wiki Documentation](https://github.com/heni/rem/wiki)
