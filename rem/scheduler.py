@@ -73,7 +73,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                            #storage with knowledge about nonassigned packets (packets that was created but not yet assigned to appropriate queue)
                            schedWatcher=SchedWatcher, #watcher for time scheduled events
                            connManager=ConnectionManager, #connections to others rems
-                           packetNames=PacketNamesStorage
+                           packetNamesTracker=PacketNamesStorage
                         ),
                 ICallbackAcceptor):
     BackupFilenameMatchRe = re.compile("sched-\d*.dump$")
@@ -83,7 +83,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         getattr(super(Scheduler, self), "__init__")()
         self.UpdateContext(context)
         self.ObjectRegistratorClass = FakeObjectRegistrator if context.execMode == "start" else ObjectRegistrator
-        self.packetNames = PacketNamesStorage()
+        self.packetNamesTracker = PacketNamesStorage()
         if context.useMemProfiler:
             self.initProfiler()
 
@@ -249,8 +249,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                     dstStorage = self.packStorage
                 dstStorage.Add(pck)
                 if pck.state != PacketState.HISTORIED:
-                    self.packetNames.Add(pck.name)
-                    pck.AddCallbackListener(self.packetNames)
+                    self.packetNamesTracker.Add(pck.name)
+                    pck.AddCallbackListener(self.packetNamesTracker)
                 q.relocatePacket(pck)
             if q.IsAlive():
                 q.Resume(resumeWorkable=True)
@@ -260,8 +260,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         queue = self.Queue(qname)
         self.packStorage.Add(pck)
         queue.Add(pck)
-        self.packetNames.Add(pck.name)
-        pck.AddCallbackListener(self.packetNames)
+        self.packetNamesTracker.Add(pck.name)
+        pck.AddCallbackListener(self.packetNamesTracker)
 
     def GetPacket(self, pck_id):
         return self.packStorage.GetPacket(pck_id)
