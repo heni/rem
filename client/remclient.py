@@ -145,6 +145,7 @@ class Queue(object):
         except xmlrpclib.Fault, e:
             if 'DuplicatePackageNameException' in e.faultString:
                 if self.conn.packet_name_policy & DENY_DUPLICATE_NAMES_POLICY:
+                    self.conn.logger.error(DuplicatePackageNameException(e.faultString).message)
                     raise DuplicatePackageNameException(e.faultString)
                 else:
                     self.conn.logger.warning(e.faultString)
@@ -561,6 +562,7 @@ class Connector(object):
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
         except xmlrpclib.Fault, e:
             if 'DuplicatePackageNameException' in e.faultString:
+                self.logger.error(DuplicatePackageNameException(e.faultString).message)
                 raise DuplicatePackageNameException(e.faultString)
             else:
                 raise
