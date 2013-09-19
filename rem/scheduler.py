@@ -250,6 +250,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 dstStorage.Add(pck)
                 if pck.state != PacketState.HISTORIED:
                     self.packetNames.Add(pck.name)
+                    pck.AddCallbackListener(self.packetNames)
                 q.relocatePacket(pck)
             if q.IsAlive():
                 q.Resume(resumeWorkable=True)
