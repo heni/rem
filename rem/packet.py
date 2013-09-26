@@ -586,9 +586,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
 
     def Reset(self):
         self.changeState(PacketState.NONINITIALIZED)
-        allTags = getattr(self, 'allTags', None)
-        if allTags is not None:
-            self.waitTags = allTags.copy()
         self.KillJobs()
         if self.done_indicator:
             self.done_indicator.Unset()
@@ -596,18 +593,21 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             tag = self.job_done_indicator.get(job_id)
             if tag:
                 tag.Unset()
+
         self.done.clear()
         for job in self.jobs.values():
             job.results = []
 
     def OnReset(self, ref):
-        if self.state == PacketState.SUCCESSFULL and self.done_indicator:
-            self.done_indicator.Reset()
-        for job_id in list(self.done):
-            tag = self.job_done_indicator.get(job_id)
-            if tag:
-                tag.Reset()
-        self.Reset()
+        if isinstance(ref, Tag):
+            if self.state == PacketState.SUCCESSFULL and self.done_indicator:
+                self.done_indicator.Reset()
+            for job_id in list(self.done):
+                tag = self.job_done_indicator.get(job_id)
+                if tag:
+                    tag.Reset()
+            self.waitTags.add(ref.GetFullname())
+            self.Reset()
 
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in

@@ -14,6 +14,7 @@ from test_10 import *
 from test_11 import *
 from test_12 import *
 from test_14 import *
+from test_15 import *
 
 
 def setUp(config, queueName="test"):
