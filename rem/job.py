@@ -116,7 +116,7 @@ class Job(Unpickable(err=nullobject,
         while process.poll() is None:
             self.working_time += time.time() - self.last_update_time
             self.last_update_time = time.time()
-            if self.working_time > self.notify_timeout:
+            if self.working_time > self.notify_timeout and not self._notified:
                 self._timeoutNotify()
             if self.working_time > self.max_working_time:
                 err = "Job id: %s time limit exceeded" % self.id
