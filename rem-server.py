@@ -113,7 +113,7 @@ def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
 
 
 @traced_rpc_method("info")
-def pck_addto_queue(pck_id, queue_name, packet_name_policy):
+def pck_addto_queue(pck_id, queue_name, packet_name_policy=constants.IGNORE_DUPLICATE_NAMES_POLICY):
     pck = _scheduler.tempStorage.PickPacket(pck_id)
     packet_name = pck.name
     if packet_name_policy & (constants.DENY_DUPLICATE_NAMES_POLICY | constants.WARN_DUPLICATE_NAMES_POLICY) and _scheduler.packetNamesTracker.Exist(packet_name):
