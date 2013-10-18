@@ -1,8 +1,11 @@
 from __future__ import with_statement
 import bsddb3
 import cPickle
+import logging
+import os
+import time
 
-from common import *
+from common import Unpickable, PickableRLock
 from callbacks import ICallbackAcceptor
 
 
@@ -103,6 +106,7 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
             self.Open(self.db_file)
 
     def Clear(self, final_time):
+        logging.info("TagLogger.Clear(%s)", final_time)
         dirname, db_filename = os.path.split(self.db_file)
         for filename in os.listdir(dirname):
             if filename.startswith(db_filename) and filename != db_filename:
