@@ -544,6 +544,9 @@ class Connector(object):
         else:
             self.logger = logging.getLogger(logger_name)
 
+    def GetURL(self):
+        return self.proxy._RetriableXMLRPCProxy__uri
+
     def Queue(self, qname):
         """возвращает объект для работы с очередью c именем qname (см. класс Queue)"""
         return Queue(self, qname)
@@ -601,6 +604,9 @@ class ServerInfo(object):
 class AdminConnector(object):
     def __init__(self, url, conn_retries=5, verbose=False):
         self.proxy = RetriableXMLRPCProxy(url, tries=conn_retries, verbose=verbose, allow_none=True)
+
+    def GetURL(self):
+        return self.proxy._RetriableXMLRPCProxy__uri
 
     def ListDeferedTags(self, name):
         """возвращает список тэгов, которые локально уже установились, но не все клиенты получили уведомление"""
@@ -682,6 +688,7 @@ class RetriableXMLRPCProxy(xmlrpclib.ServerProxy):
     def __init__(self, uri, tries, **kws):
         self.__maxTries = tries
         self.__verbose = kws.pop("verbose")
+        self.__uri = uri
         kws["transport"] = AuthTransport()
         xmlrpclib.ServerProxy.__init__(self, uri, **kws)
 

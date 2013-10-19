@@ -13,7 +13,9 @@ from test_09 import *
 from test_10 import *
 from test_11 import *
 from test_12 import *
+from test_13 import *
 from test_14 import *
+from test_last import *
 
 
 def setUp(config, queueName="test"):

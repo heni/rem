@@ -4,7 +4,7 @@ from workers import *
 from callbacks import Tag
 from scheduler import Queue, Scheduler
 from context import Context
-from common import CheckEmailAddress
+from common import CheckEmailAddress, traced_rpc_method
 
 
 def DefaultContext(execMode=None):

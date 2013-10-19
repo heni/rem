@@ -596,6 +596,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             tag = self.job_done_indicator.get(job_id)
             if tag:
                 tag.Unset()
+
         self.done.clear()
         for job in self.jobs.values():
             job.results = []

@@ -86,6 +86,7 @@ class ObjectRegistrator(object):
 
 
 ObjectRegistrator_ = FakeObjectRegistrator()
+#ObjectRegistrator_ = ObjectRegistrator()
 
 
 def Unpickable(**kws):
@@ -164,6 +165,11 @@ def emptyset(*args):
 
 def zeroint(*args):
     return int()
+
+def safeint(oth=None):
+    if not isinstance(oth, int):
+        return int()
+    return int(oth)
 
 
 class nullobject(object):

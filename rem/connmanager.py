@@ -12,6 +12,7 @@ from callbacks import Tag, ICallbackAcceptor
 
 
 class ClientInfo(Unpickable(taglist=set,
+                            name=str,
                             subscriptions=set,
                             errorsCnt=(int, 0),
                             active=(bool, True))):

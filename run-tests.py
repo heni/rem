@@ -29,9 +29,9 @@ class ClientInfo(object):
         self.url = "http://%s:%d" % (hostname, cp.getint("server", "port"))
         self.admin_url = "http://%s:%d" % (hostname, cp.getint("server", "system_port"))
         self.readonly_url = "http://%s:%d" % (hostname, cp.getint("server", "readonly_port"))
-        self.connector = remclient.Connector(self.url, verbose=True, packet_name_policy=remclient.PCK_DUPLICATE_NAME_IGNORE)
+        self.connector = remclient.Connector(self.url, verbose=True, packet_name_policy=remclient.IGNORE_DUPLICATE_NAMES_POLICY)
         self.admin_connector = remclient.AdminConnector(self.admin_url, verbose=True)
-        self.readonly_connector = remclient.Connector(self.readonly_url, verbose=True, packet_name_policy=remclient.PCK_DUPLICATE_NAME_IGNORE)
+        self.readonly_connector = remclient.Connector(self.readonly_url, verbose=True, packet_name_policy=remclient.IGNORE_DUPLICATE_NAMES_POLICY)
 
     def LoadConfiguration(self, config_path, tmpdir):
         if config_path.startswith("svn+ssh://"):
@@ -54,9 +54,12 @@ class Configuration(object):
     @classmethod
     def GetLocalConfig(cls):
         config = cls()
-        config.server1 = ClientInfo("local-01", "local://.", "localhost")
-        config.server2 = ClientInfo("local-02", "local://../rem2/", "localhost")
-        config.notify_email = "eugene.krokhalev@gmail.com"
+        #config.server1 = ClientInfo("local-01", "local://.", "localhost")
+        #config.server2 = ClientInfo("local-02", "local://../rem2/", "localhost")
+        #config.notify_email = "eugene.krokhalev@gmail.com"
+        config.server1 = ClientInfo("local-01", "/home/yuliy/rem1", "localhost")
+        config.server2 = ClientInfo("local-02", "/home/yuliy/rem2", "localhost")
+        config.notify_email = "yuliy@yandex-team.ru"
         return config
 
     @staticmethod

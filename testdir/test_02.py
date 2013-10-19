@@ -190,7 +190,7 @@ class T02(unittest.TestCase):
         pckInfo.MoveToQueue(queue2, queue2)
         pckInfo.MoveToQueue(queue2, queue1)
         pckInfo.Resume()
-        self.assertEqual(WaitForExecution(pckInfo), "SUCCESSFULL", 1.0)
+        self.assertEqual(WaitForExecution(pckInfo), "SUCCESSFULL")
 
     def testMoveErroredPacket(self):
         pckname = "moving-packet-%d" % self.timestamp
@@ -243,7 +243,7 @@ class T02(unittest.TestCase):
             tagname = "async-query-tag-%d" % i
             self.connector.Tag(tagname).Set()
         logging.info("tags are set")
-        requesters = [Thread(target=queryFunction, args=[copy.copy(self.connector)]) for _ in xrange(5)]
+        requesters = [Thread(target=queryFunction, args=[remclient.Connector(self.connector.GetURL())]) for _ in xrange(5)]
         map(lambda t: t.start(), requesters)
         map(lambda t: t.join(), requesters)
 
