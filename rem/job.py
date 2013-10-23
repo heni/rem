@@ -3,6 +3,7 @@ import subprocess
 import logging
 import os
 import time
+import datetime
 import threading
 
 from callbacks import CallbackHolder
@@ -64,7 +65,8 @@ class TimeOutExceededResult(IResult):
     time_format = CommandLineResult.time_format
 
     def __init__(self, jobId):
-        IResult.__init__(self, "Job %s timelimit exceeded at %s" % (jobId, time.strftime(self.time_format, time.time())))
+        ts = datetime.datetime.fromtimestamp(time.time())
+        IResult.__init__(self, "Timeout exceeded", 1, "Job %s timelimit exceeded at %s" % (jobId, ts.strftime(self.time_format)))
 
 
 class PackedExecuteResult(IResult):
