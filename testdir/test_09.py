@@ -35,6 +35,7 @@ class T09(unittest.TestCase):
                 self.tag = tag
                 self.notifyEmails = notify_emails
                 self.clientType = client_type
+                self.pck = None
 
             def run(self):
                 with self.printLock:
@@ -46,39 +47,40 @@ class T09(unittest.TestCase):
                 queue = conn.Queue(self.queue)
                 tag = self.tag
                 if self.clientType == 'tag_creator':
-                    pack = conn.Packet(
+                    self.pck = conn.Packet(
                         'tag_creator.' + tag,
                         time.time(),
                         wait_tags=[],
                         set_tag=tag,
                         notify_emails=self.notifyEmails
                     )
-                    pack.AddJob(shell='echo tag_creator')
+                    self.pck.AddJob(shell='echo tag_creator')
                 elif self.clientType == 'tag_checker':
-                    pack = conn.Packet(
+                    self.pck = conn.Packet(
                         'tag_checker.' + tag,
                         time.time(),
                         wait_tags=[tag],
                         notify_emails=self.notifyEmails
                     )
-                    pack.AddJob(shell='echo tag_checker')
+                    self.pck.AddJob(shell='echo tag_checker')
                 else:
                     raise RuntimeError('Undefined clientType field value: %s!' % self.clientType)
 
-                queue.AddPacket(pack)
+                queue.AddPacket(self.pck)
 
                 with self.printLock:
                     logging.info("Client thread finished: tag=%s clientType=%s" % (self.tag, self.clientType))
 
         N = 1000
         printLock = threading.Lock()
-        randNum = random.randint(0, 1000000)
-        random.seed(time.time())
+        ts = time.time()
         tags = []
+        creatorPackets = []
+        checkerPackets = []
         for i in xrange(N):
             signal = threading.Event()
             queue = 'duplicate_tags_test'
-            tag = 'dup_tag_%d_%d' % (randNum, i)
+            tag = 'dup_tag_%d_%d' % (int(ts), i)
             tags.append(tag)
 
             threadCreator = ClientThread(signal, printLock, self.remUrl, queue, tag, self.notifyEmails, 'tag_creator')
@@ -91,6 +93,18 @@ class T09(unittest.TestCase):
 
             threadCreator.join()
             threadChecker.join()
+
+            creatorPackets.append(
+                self.connector.PacketInfo(threadCreator.pck.id)
+            )
+            checkerPackets.append(
+                self.connector.PacketInfo(threadChecker.pck.id)
+            )
+
+        for pck in creatorPackets:
+            self.assertTrue(WaitForExecution(pck), "SUCCESSFULL")
+        for pck in checkerPackets:
+            self.assertTrue(WaitForExecution(pck), "SUCCESSFULL")
 
         for tagName in tags:
             logging.info('Checking tag "%s"' % tagName)
