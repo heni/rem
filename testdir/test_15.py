@@ -24,7 +24,7 @@ class T15(unittest.TestCase):
 
     def testRemoteTagReset(self):
         timestamp = time.time()
-        p = self.connector.Packet('test_tag_reset-{}'.format(time.time()), wait_tags=['local-02:r_tag_a-{}'.format(timestamp), 'local-02:r_tag_b-{}'.format(timestamp), 'r_tag_c-{}'.format(timestamp)])
+        p = self.connector.Packet('test_tag_reset-{}'.format(time.time()), wait_tags=['{}:r_tag_a-{}'.format(Config.Get().server2.name, timestamp), '{}:r_tag_b-{}'.format(Config.Get().server2.name, timestamp), 'r_tag_c-{}'.format(timestamp)])
         self.connector.Queue('test').AddPacket(p)
         self.connector.Tag('r_tag_c-{}'.format(timestamp)).Set()
         self.connector2.Tag('r_tag_a-{}'.format(timestamp)).Set()

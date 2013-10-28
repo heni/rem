@@ -12,6 +12,7 @@ import threading
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from SocketServer import ThreadingMixIn
 import Queue as StdQueue
+import xmlrpclib
 
 from rem import *
 
