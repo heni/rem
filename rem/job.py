@@ -84,7 +84,6 @@ class Job(Unpickable(err=nullobject,
                      description=str,
                      max_working_time=(int, constants.KILL_JOB_DEFAULT_TIMEOUT),
                      notify_timeout=(int, constants.NOTIFICATION_TIMEOUT),
-                     last_update_time=zeroint,
                      working_time=int,
                      _notified=bool),
           CallbackHolder):
@@ -121,11 +120,11 @@ class Job(Unpickable(err=nullobject,
         stderrReadThread.start()
         if process.stdin:
             process.stdin.close()
-        self.last_update_time = self.last_update_time or time.time()
-        self.working_time += time.time() - self.last_update_time
+        last_update_time = time.time()
+        self.working_time = 0
         while process.poll() is None:
-            self.working_time += time.time() - self.last_update_time
-            self.last_update_time = time.time()
+            self.working_time += time.time() - last_update_time
+            last_update_time = time.time()
             if self.working_time > self.notify_timeout and not self._notified:
                 self._timeoutNotify()
             if self.working_time > self.max_working_time:
