@@ -441,6 +441,12 @@ class RemDaemon(object):
             self.permitFinalBackup = True
             #kill running tasks
             map(lambda worker: worker.Kill(), self.regWorkers)
+            import multiprocessing
+            logging.debug("{} children founded after custom kill", len(multiprocessing.active_children()))
+            for proc in multiprocessing.active_children():
+
+                proc.terminate()
+
         else:
             logging.warning("rem-server\talredy dead scheduler, wait for a minute")
 

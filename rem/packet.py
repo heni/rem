@@ -374,8 +374,8 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                 or ref.id not in self.jobs \
                 or self.waitJobs[ref.id] \
                 or not self.directory:
-                raise RuntimeError("not all conditions are met for starting job %s; packet state: %s; directory: %s" % (
-                    ref.id, self.state, self.directory))
+                raise RuntimeError("not all conditions are met for starting job %s; waitJobs: %s; packet state: %s; directory: %s" % (
+                    ref.id, self.waitJobs[ref.id], self.state, self.directory))
             logging.debug("job %s\tstarted", ref.shell)
             with self.lock:
                 self.ProcessJobStart(ref)
