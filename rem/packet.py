@@ -374,8 +374,8 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                 or ref.id not in self.jobs \
                 or self.waitJobs[ref.id] \
                 or not self.directory:
-                raise RuntimeError("not all conditions are met for starting job %s; packet state: %s; directory: %s" % (
-                    ref.id, self.state, self.directory))
+                raise RuntimeError("not all conditions are met for starting job %s; waitJobs: %s; packet state: %s; directory: %s" % (
+                    ref.id, self.waitJobs[ref.id], self.state, self.directory))
             logging.debug("job %s\tstarted", ref.shell)
             with self.lock:
                 self.ProcessJobStart(ref)
@@ -586,9 +586,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
 
     def Reset(self):
         self.changeState(PacketState.NONINITIALIZED)
-        allTags = getattr(self, 'allTags', None)
-        if allTags is not None:
-            self.waitTags = allTags.copy()
         self.KillJobs()
         if self.done_indicator:
             self.done_indicator.Unset()
@@ -602,13 +599,15 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             job.results = []
 
     def OnReset(self, ref):
-        if self.state == PacketState.SUCCESSFULL and self.done_indicator:
-            self.done_indicator.Reset()
-        for job_id in list(self.done):
-            tag = self.job_done_indicator.get(job_id)
-            if tag:
-                tag.Reset()
-        self.Reset()
+        if isinstance(ref, Tag):
+            if self.state == PacketState.SUCCESSFULL and self.done_indicator:
+                self.done_indicator.Reset()
+            for job_id in list(self.done):
+                tag = self.job_done_indicator.get(job_id)
+                if tag:
+                    tag.Reset()
+            self.waitTags.add(ref.GetFullname())
+            self.Reset()
 
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in

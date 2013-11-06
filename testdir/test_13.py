@@ -14,7 +14,7 @@ class T13(unittest.TestCase):
             timestamp,
             wait_tags=[],
         )
-        pck.AddJob(shell="sleep 5", max_working_time=3)
+        pck.AddJob(shell="sleep 5", max_working_time=3, tries=2)
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)
         WaitForExecution(pckInfo)
