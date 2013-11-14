@@ -127,8 +127,8 @@ class T02(unittest.TestCase):
         with tempfile.NamedTemporaryFile(dir=".") as script_printer:
             print >> script_printer, "#!/usr/bin/env python"
             print >> script_printer, "import sys"
-            print >> script_printer, "for i in xrange(1000000): print 'Hello, World!'"
-            print >> script_printer, "for i in xrange(1000000): print >>sys.stderr, 'Hello, World!'"
+            print >> script_printer, r"print 'Hello, World!\n'*10000000"
+            print >> script_printer, r"print >>sys.stderr, 'Hello, World!\n'*10000000"
             script_printer.flush()
             j1 = pck.AddJob("./huge.py", tries=2, files={"huge.py": script_printer.name})
         j2 = pck.AddJob("wc -l", pipe_parents=[j1], tries=2)
