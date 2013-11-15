@@ -17,16 +17,14 @@ class Signals(object):
         self.lock = threading.Lock()
 
     def handler(self, signum, frame):
-        self.lock.acquire()
-        try:
-            for fn in reversed(self.handlers.get(signum, [])):
-                if callable(fn):
-                    fn(signum, frame)
-        except:
-            logging.exception("PANIC while signal %s processing", signum)
-            sys.exit(1)
-        finally:
-            self.lock.release()
+        with self.lock:
+            try:
+                for fn in reversed(self.handlers.get(signum, [])):
+                    if callable(fn):
+                        fn(signum, frame)
+            except:
+                logging.exception("PANIC while signal %s processing", signum)
+                sys.exit(1)
 
     def register(self, signum, handler):
         assert callable(handler)

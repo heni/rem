@@ -172,7 +172,10 @@ class JobPacketImpl(object):
     def ReleasePlace(self):
         self.ReleaseLinks()
         if self.directory and os.path.isdir(self.directory):
-            shutil.rmtree(self.directory, onerror=None)
+            try:
+                shutil.rmtree(self.directory, onerror=None)
+            except Exception, e:
+                logging.error("Packet %s release place error: %s", self.id, e)
         self.directory = None
         self.streams.clear()
 
@@ -370,7 +373,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         if not hasattr(self, "waitJobs"):
             self.UpdateJobsDependencies()
         if isinstance(ref, Job):
-            if self.state not in (PacketState.WORKABLE, PacketState.PENDING) \
+            if self.state not in (PacketState.WORKABLE, PacketState.PENDING, PacketState.WAITING) \
                 or ref.id not in self.jobs \
                 or self.waitJobs[ref.id] \
                 or not self.directory:
@@ -581,6 +584,17 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             yield self.jobs[jid]
 
     def KillJobs(self):
+        try:
+            for key, stream in self.streams:
+                if stream is not None:
+                    if isinstance(stream, file):
+                        if not stream.closed:
+                            try:
+                                stream.close()
+                            except:
+                                pass
+        except:
+            pass
         for job in self.GetWorkingJobs():
             job.Terminate()
 

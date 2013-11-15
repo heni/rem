@@ -54,12 +54,9 @@ class Configuration(object):
     @classmethod
     def GetLocalConfig(cls):
         config = cls()
-        #config.server1 = ClientInfo("local-01", "local://.", "localhost")
-        #config.server2 = ClientInfo("local-02", "local://../rem2/", "localhost")
-        #config.notify_email = "eugene.krokhalev@gmail.com"
-        config.server1 = ClientInfo("local-01", "/home/yuliy/rem1", "localhost")
-        config.server2 = ClientInfo("local-02", "/home/yuliy/rem2", "localhost")
-        config.notify_email = "yuliy@yandex-team.ru"
+        config.server1 = ClientInfo("local-01", "local://.", "localhost")
+        config.server2 = ClientInfo("local-02", "local://../rem2/", "localhost")
+        config.notify_email = "eugene.krokhalev@gmail.com"
         return config
 
     @staticmethod

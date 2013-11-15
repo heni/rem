@@ -444,7 +444,6 @@ class RemDaemon(object):
             import multiprocessing
             logging.debug("{} children founded after custom kill", len(multiprocessing.active_children()))
             for proc in multiprocessing.active_children():
-
                 proc.terminate()
 
         else:
