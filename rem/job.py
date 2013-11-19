@@ -223,10 +223,10 @@ class Job(Unpickable(err=nullobject,
                             os.close(stream)
                         else:
                             raise RuntimeError("can't close unknown file object %r" % stream)
-                    except Exception, e:
-                        logging.debug(e.message)
-            except Exception, e:
-                logging.exception("%s", e)
+                    except:
+                        pass
+            except:
+                logging.exception('close stream error')
 
     def Terminate(self):
         pids = getattr(self, "pids", None)
