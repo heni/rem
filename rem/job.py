@@ -215,16 +215,13 @@ class Job(Unpickable(err=nullobject,
             try:
                 stream = fn()
                 if stream is not None:
-                    try:
-                        if isinstance(stream, file):
-                            if not stream.closed:
-                                stream.close()
-                        elif isinstance(stream, int):
-                            os.close(stream)
-                        else:
-                            raise RuntimeError("can't close unknown file object %r" % stream)
-                    except:
-                        pass
+                    if isinstance(stream, file):
+                        if not stream.closed:
+                            stream.close()
+                    elif isinstance(stream, int):
+                        os.close(stream)
+                    else:
+                        raise RuntimeError("can't close unknown file object %r" % stream)
             except:
                 logging.exception('close stream error')
 
