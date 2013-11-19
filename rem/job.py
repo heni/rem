@@ -122,9 +122,11 @@ class Job(Unpickable(err=nullobject,
             process.stdin.close()
         last_update_time = time.time()
         self.working_time = 0
-        while process.poll() is None:
-            self.working_time += time.time() - last_update_time
-            last_update_time = time.time()
+        poll = process.poll
+        _time = time.time
+        while poll() is None:
+            self.working_time += _time() - last_update_time
+            last_update_time = _time()
             if self.working_time > self.notify_timeout and not self._notified:
                 self._timeoutNotify()
             if self.working_time > self.max_working_time:
@@ -160,7 +162,7 @@ class Job(Unpickable(err=nullobject,
                     self.results.append(TriesExceededResult(self.tries))
                 if self.packetRef.kill_all_jobs_on_error:
                     self.packetRef.UserSuspend(kill_jobs=True)
-                self.packetRef.changeState(packet.PacketState.ERROR)
+                    self.packetRef.changeState(packet.PacketState.ERROR)
         except:
             logging.exception("some error during job finalization")
 
@@ -220,8 +222,8 @@ class Job(Unpickable(err=nullobject,
                         os.close(stream)
                     else:
                         raise RuntimeError("can't close unknown file object %r" % stream)
-            except Exception, e:
-                logging.exception("%s", e)
+            except:
+                logging.exception('close stream error')
 
     def Terminate(self):
         pids = getattr(self, "pids", None)
