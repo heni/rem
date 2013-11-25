@@ -7,4 +7,4 @@ Maintainers:
 * Kostiantyn Snihyr (lexplua@yandex-team.ru)
  
 
-[Wiki Documentation](https://github.com/heni/rem/wiki)
+For documentation see  [wiki](https://github.com/heni/rem/wiki)
