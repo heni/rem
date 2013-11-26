@@ -90,7 +90,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self._frozen = False
         if context.useMemProfiler:
             self.initProfiler()
-        logging.debug('create scheduler: mess storage: %s', dir(self.messageStorage))
 
     def frozen(self, value=False):
         with self.lock:
