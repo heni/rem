@@ -96,6 +96,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     for tag in wait_tags:
         _scheduler.connManager.Subscribe(tag)
     _scheduler.tempStorage.StorePacket(pck)
+    _scheduler.messageStorage.add_holder(pck)
     logging.info('packet %s registered as %s', packet_name, pck.id)
     return pck.id
 
@@ -454,6 +455,7 @@ class RemDaemon(object):
         self.scheduler.Start()
         self.regWorkers = [ThreadJobWorker(self.scheduler) for _ in xrange(self.scheduler.poolSize)]
         self.timeWorker = TimeTicker()
+        self.scheduler.messageStorage.add_holder(self.timeWorker)
         self.timeWorker.AddCallbackListener(self.scheduler.schedWatcher)
         for worker in self.regWorkers + [self.timeWorker]:
             worker.start()

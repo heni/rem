@@ -37,6 +37,11 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
         bad_listeners = set()
         for obj in itertools.chain(self.callbacks.keyrefs(), self.nonpersistent_callbacks.keyrefs()):
             if isinstance(obj(), ICallbackAcceptor):
+                if getattr(self, 'message_queue', None):
+                    if getattr(self.message_queue, 'scheduler', None):
+                        if self.message_queue.scheduler.frozen():
+                            self.message_queue.store_message(emitter=self, event=event, ref=reference)
+                            return
                 obj().AcceptCallback(reference or self, event)
             else:
                 logging.warning("callback %r\tincorrect acceptor found: %s", self, obj())

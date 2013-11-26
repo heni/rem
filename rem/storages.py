@@ -9,13 +9,13 @@ import bsddb3
 import cPickle
 
 from common import *
-from callbacks import Tag, RemoteTag
+from callbacks import Tag, RemoteTag, CallbackHolder
 from journal import TagLogger
 from callbacks import ICallbackAcceptor
 from packet import PacketState, JobPacket
 
 
-__all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
+__all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage", "PacketNamesStorage", "MessageStorage"]
 
 
 class GlobalPacketStorage(object):
@@ -231,6 +231,7 @@ class TagStorage(object):
     def AcquireTag(self, tagname):
         if tagname:
             tag = self.RawTag(tagname)
+            self.conn_manager.scheduler.messageStorage.add_holder(tag)
             with self.lock:
                 return TagWrapper(self.inmem_items.setdefault(tagname, tag))
 
@@ -275,6 +276,7 @@ class TagStorage(object):
         self.additional_listeners = set()
         self.additional_listeners.add(context.Scheduler.connManager)
         self.additional_listeners.add(self.tag_logger)
+        context.Scheduler.messageStorage.add_holder(self)
 
     def Restore(self):
         self.tag_logger.Restore()
@@ -334,3 +336,24 @@ class PacketNamesStorage(ICallbackAcceptor):
         pass
 
 
+class MessageStorage(object):
+    Message = namedtuple('Message', 'emitter event ref')
+    message_queue = Queue()
+
+    def __init__(self, scheduler=None):
+        self.scheduler = scheduler
+
+    def store_message(self, emitter, event, ref):
+        self.message_queue.put(self.Message(emitter, event, ref))
+
+    def sendall(self):
+        while not self.message_queue.empty():
+            message = self.message_queue.get()
+            message.emitter.FireEvent(message.event, message.ref)
+
+    def add_holder(self, obj):
+        if isinstance(obj, CallbackHolder):
+            obj.message_queue = self
+
+    def __getstate__(self):
+        return {}

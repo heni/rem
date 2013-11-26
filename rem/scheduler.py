@@ -15,7 +15,7 @@ from rem import PacketCustomLogic
 from connmanager import ConnectionManager
 from packet import JobPacket, PacketState, PacketFlag
 from queue import Queue
-from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage
+from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage, MessageStorage
 from callbacks import ICallbackAcceptor
 
 
@@ -73,7 +73,9 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                            #storage with knowledge about nonassigned packets (packets that was created but not yet assigned to appropriate queue)
                            schedWatcher=SchedWatcher, #watcher for time scheduled events
                            connManager=ConnectionManager, #connections to others rems
-                           packetNamesTracker=PacketNamesStorage
+                           packetNamesTracker=PacketNamesStorage,
+                           messageStorage=MessageStorage,
+                           _frozen=(bool, False)
                         ),
                 ICallbackAcceptor):
     BackupFilenameMatchRe = re.compile("sched-\d*.dump$")
@@ -81,11 +83,24 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def __init__(self, context):
         getattr(super(Scheduler, self), "__init__")()
+        self.messageStorage = MessageStorage(self)
         self.UpdateContext(context)
         self.ObjectRegistratorClass = FakeObjectRegistrator if context.execMode == "start" else ObjectRegistrator
         self.packetNamesTracker = PacketNamesStorage()
+        self._frozen = False
         if context.useMemProfiler:
             self.initProfiler()
+        logging.debug('create scheduler: mess storage: %s', dir(self.messageStorage))
+
+    def frozen(self, value=False):
+        with self.lock:
+            if not value:
+                self._frozen = False
+                return self._frozen
+            else:
+                self._frozen = True
+                return self._frozen
+
 
     def UpdateContext(self, context=None):
         if context is not None:
@@ -133,6 +148,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             q = self.qRef[qname] = Queue(qname)
             q.UpdateContext(self.context)
             q.AddCallbackListener(self)
+            self.messageStorage.add_holder(q)
             self.qList.append(q)
             return q
 
@@ -173,6 +189,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def SaveData(self, filename):
         gc.collect()
+        time.sleep(2)
+        self.frozen(True)
         sdict = {"qList": copy.copy(self.qList),
                  "qRef": copy.copy(self.qRef),
                  "tagRef": self.tagRef,
@@ -184,6 +202,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         with open(tmpFilename, "w") as backup_printer:
             pickler = Pickler(backup_printer, 2)
             pickler.dump(sdict)
+        self.frozen(False)
         os.rename(tmpFilename, filename)
         if self.context.useMemProfiler:
             try:
@@ -203,12 +222,14 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
         with self.lock:
             common.ObjectRegistrator_ = ObjectRegistrator_ = self.ObjectRegistratorClass()
+            self.messageStorage = MessageStorage(self)
             unpickler = Unpickler(stream)
             sdict = unpickler.load()
             assert isinstance(sdict, dict)
             #update internal structures
             qRef = sdict.pop("qRef")
             self.__setstate__(sdict)
+            self.messageStorage.scheduler = self
             self.UpdateContext(None)
             self.RegisterQueues(qRef)
             #output objects statistics
@@ -221,7 +242,9 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         for qname, q in qRef.iteritems():
             q.UpdateContext(self.context)
             q.AddCallbackListener(self)
+            self.messageStorage.add_holder(q)
             for pck in list(q.ListAllPackets()):
+                self.messageStorage.add_holder(pck)
                 dstStorage = self.packStorage
                 pck.UpdateTagDependencies(self.tagRef)
                 if pck.directory and os.path.isdir(pck.directory):
