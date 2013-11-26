@@ -1,7 +1,6 @@
 import weakref
 import logging
 import itertools
-
 from common import *
 
 

@@ -13,7 +13,8 @@ from callbacks import Tag, RemoteTag, CallbackHolder
 from journal import TagLogger
 from callbacks import ICallbackAcceptor
 from packet import PacketState, JobPacket
-
+from collections import namedtuple
+from Queue import Queue
 
 __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage", "PacketNamesStorage", "MessageStorage"]
 

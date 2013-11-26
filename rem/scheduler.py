@@ -222,13 +222,13 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
         with self.lock:
             common.ObjectRegistrator_ = ObjectRegistrator_ = self.ObjectRegistratorClass()
-            self.messageStorage = MessageStorage(self)
             unpickler = Unpickler(stream)
             sdict = unpickler.load()
             assert isinstance(sdict, dict)
             #update internal structures
             qRef = sdict.pop("qRef")
             self.__setstate__(sdict)
+            self.messageStorage = MessageStorage(self)
             self.messageStorage.scheduler = self
             self.UpdateContext(None)
             self.RegisterQueues(qRef)
