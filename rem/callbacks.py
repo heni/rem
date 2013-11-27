@@ -38,7 +38,7 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
         for obj in itertools.chain(self.callbacks.keyrefs(), self.nonpersistent_callbacks.keyrefs()):
             if isinstance(obj(), ICallbackAcceptor):
                 if scheduler is not None and scheduler.IsFrozen():
-                    if allow_defferred:
+                    if not allow_defferred:
                         scheduler.WaitUnfreeze()
                     else:
                         self.message_queue.StoreMessage(acceptor=obj, event=event, ref=reference or self)
