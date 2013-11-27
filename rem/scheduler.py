@@ -284,12 +284,18 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 q.Resume(resumeWorkable=True)
             self.qRef[qname] = q
 
-    def RegisterPacket(self, qname, pck):
+    def AddPacketToQueue(self, qname, pck):
         queue = self.Queue(qname)
         self.packStorage.Add(pck)
         queue.Add(pck)
         self.packetNamesTracker.Add(pck.name)
         pck.AddCallbackListener(self.packetNamesTracker)
+
+    def RegisterNewPacket(self, pck, wait_tags):
+        for tag in wait_tags:
+            self.connManager.Subscribe(tag)
+        self.tempStorage.StorePacket(pck)
+        self.messageStorage.AddHolder(pck)
 
     def GetPacket(self, pck_id):
         return self.packStorage.GetPacket(pck_id)
@@ -306,4 +312,5 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.connManager.Stop()
 
     def GetConnectionManager(self):
-        return self.connManager
+        return self.connManager\
+

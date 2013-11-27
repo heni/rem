@@ -157,7 +157,6 @@ class MoveCommander(ICommander):
 
 
 def main():
-    global opt, args, disp_commands, commander
     opt, args = parse_args()
     disp_commands = {"list": ListCommander, "suspend": LifeCommander, "resume": LifeCommander, "restart": LifeCommander,
                      "status": StatusCommander, "update": UpdateCommander, "delete": LifeCommander,
