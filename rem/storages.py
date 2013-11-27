@@ -361,7 +361,7 @@ class MessageStorage(object):
         if isinstance(obj, CallbackHolder):
             obj.message_queue = self
         else:
-            logging.warning("Message queue:  %r\tincorrect holder found: %s", self, obj)
+            logging.warning("Message queue:  %s\tincorrect holder found: %s", self, obj)
 
     def __getstate__(self):
         return {}
