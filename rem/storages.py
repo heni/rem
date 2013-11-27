@@ -338,19 +338,20 @@ class PacketNamesStorage(ICallbackAcceptor):
 
 
 class MessageStorage(object):
-    Message = namedtuple('Message', 'emitter event ref')
+    Message = namedtuple('Message', 'acceptor emitter event ref')
     message_queue = Queue()
 
     def __init__(self, scheduler=None):
-        self.scheduler = scheduler
+        if scheduler:
+            self.scheduler = weakref.proxy(scheduler)
 
-    def store_message(self, emitter, event, ref):
-        self.message_queue.put(self.Message(emitter, event, ref))
+    def store_message(self, acceptor, emitter, event, ref):
+        self.message_queue.put(self.Message(acceptor, emitter, event, ref))
 
     def sendall(self):
         while not self.message_queue.empty():
             message = self.message_queue.get()
-            message.emitter.FireEvent(message.event, message.ref)
+            message.acceptor().AcceptCallback(message.ref or message.emitter, message.event)
 
     def add_holder(self, obj):
         if isinstance(obj, CallbackHolder):

@@ -90,14 +90,15 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self._frozen = False
         if context.useMemProfiler:
             self.initProfiler()
-        logging.debug('create scheduler: mess storage: %s', dir(self.messageStorage))
 
-    def frozen(self, value=False):
+    def frozen(self, value=None):
         with self.lock:
-            if not value:
+            if value is None:
+                return self._frozen
+            elif not value:
                 self._frozen = False
                 return self._frozen
-            else:
+            elif value:
                 self._frozen = True
                 return self._frozen
 
@@ -189,20 +190,24 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def SaveData(self, filename):
         gc.collect()
-        time.sleep(2)
         self.frozen(True)
-        sdict = {"qList": copy.copy(self.qList),
-                 "qRef": copy.copy(self.qRef),
-                 "tagRef": self.tagRef,
-                 "binStorage": self.binStorage,
-                 "tempStorage": self.tempStorage,
-                 "schedWatcher": self.schedWatcher,
-                 "connManager": self.connManager}
-        tmpFilename = filename + ".tmp"
-        with open(tmpFilename, "w") as backup_printer:
-            pickler = Pickler(backup_printer, 2)
-            pickler.dump(sdict)
-        self.frozen(False)
+        try:
+            sdict = {"qList": copy.copy(self.qList),
+                     "qRef": copy.copy(self.qRef),
+                     "tagRef": self.tagRef,
+                     "binStorage": self.binStorage,
+                     "tempStorage": self.tempStorage,
+                     "schedWatcher": self.schedWatcher,
+                     "connManager": self.connManager}
+            tmpFilename = filename + ".tmp"
+            with open(tmpFilename, "w") as backup_printer:
+                pickler = Pickler(backup_printer, 2)
+                pickler.dump(sdict)
+        except:
+            logging.exception("Backup error")
+        finally:
+            self.frozen(False)
+            self.messageStorage.sendall()
         os.rename(tmpFilename, filename)
         if self.context.useMemProfiler:
             try:

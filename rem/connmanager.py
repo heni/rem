@@ -164,6 +164,8 @@ class ConnectionManager(Unpickable(topologyInfo=TopologyInfo,
         while self.alive:
             rout, _, _ = select.select((rpc_fd,), (), (), 0.01)
             if rpc_fd in rout:
+                while self.scheduler.frozen():
+                    time.sleep(.01)
                 self.rpcserver.handle_request()
 
     def SendData(self, client):

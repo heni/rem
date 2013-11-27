@@ -39,7 +39,7 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
                 if getattr(self, 'message_queue', None):
                     if getattr(self.message_queue, 'scheduler', None):
                         if self.message_queue.scheduler.frozen():
-                            self.message_queue.store_message(emitter=self, event=event, ref=reference)
+                            self.message_queue.store_message(acceptor=obj, emitter=self, event=event, ref=reference)
                             return
                 obj().AcceptCallback(reference or self, event)
             else:
