@@ -40,9 +40,10 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
                 if scheduler is not None and scheduler.IsFrozen():
                     if allow_defferred:
                         scheduler.WaitUnfreeze()
-                    self.message_queue.StoreMessage(acceptor=obj, event=event, ref=reference or self)
-                else:
-                    obj().AcceptCallback(reference or self, event)
+                    else:
+                        self.message_queue.StoreMessage(acceptor=obj, event=event, ref=reference or self)
+                        continue
+                obj().AcceptCallback(reference or self, event)
             else:
                 logging.warning("callback %r\tincorrect acceptor found: %s", self, obj())
                 bad_listeners.add(obj())
