@@ -83,25 +83,26 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def __init__(self, context):
         getattr(super(Scheduler, self), "__init__")()
-        self.messageStorage = MessageStorage(self)
         self.UpdateContext(context)
         self.ObjectRegistratorClass = FakeObjectRegistrator if context.execMode == "start" else ObjectRegistrator
-        self.packetNamesTracker = PacketNamesStorage()
-        self._frozen = False
         if context.useMemProfiler:
             self.initProfiler()
 
-    def frozen(self, value=None):
+    def Freeze(self):
         with self.lock:
-            if value is None:
-                return self._frozen
-            elif not value:
-                self._frozen = False
-                return self._frozen
-            elif value:
-                self._frozen = True
-                return self._frozen
+            self._frozen = True
 
+    def UnFreeze(self):
+        with self.lock:
+            self._frozen = False
+        self.messageStorage.SendAll()
+
+    def IsFrozen(self):
+        return self._frozen
+
+    def WaitUnfreeze(self):
+        while self.IsFrozen():
+            time.sleep(.01)
 
     def UpdateContext(self, context=None):
         if context is not None:
@@ -109,6 +110,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.poolSize = context.thread_pool_size
             self.initBackupSystem(context)
             context.registerScheduler(self)
+        self.messageStorage.UpdateContext(self.context)
         self.binStorage.UpdateContext(self.context)
         self.tagRef.UpdateContext(self.context)
         PacketCustomLogic.UpdateContext(self.context)
@@ -190,7 +192,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def SaveData(self, filename):
         gc.collect()
-        self.frozen(True)
+        self.Freeze()
         try:
             sdict = {"qList": copy.copy(self.qList),
                      "qRef": copy.copy(self.qRef),
@@ -206,8 +208,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         except:
             logging.exception("Backup error")
         finally:
-            self.frozen(False)
-            self.messageStorage.SendAll()
+            self.UnFreeze()
         os.rename(tmpFilename, filename)
         if self.context.useMemProfiler:
             try:
@@ -233,8 +234,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             #update internal structures
             qRef = sdict.pop("qRef")
             self.__setstate__(sdict)
-            self.messageStorage = MessageStorage(self)
-            self.messageStorage.scheduler = self
             self.UpdateContext(None)
             self.RegisterQueues(qRef)
             #output objects statistics
@@ -312,5 +311,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.connManager.Stop()
 
     def GetConnectionManager(self):
-        return self.connManager\
+        return self.connManager
+
 

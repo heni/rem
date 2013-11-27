@@ -113,10 +113,6 @@ class Job(Unpickable(err=nullobject,
     def __read_stream(fh, buffer):
         buffer.append(fh.read())
 
-    def wait_streams(self):
-        while self.input is None or self.output is None:
-            time.sleep(.01)
-
     def __wait_process(self, process, err_pipe):
         out = []
         stderrReadThread = threading.Thread(target=Job.__read_stream, args=(err_pipe, out))
@@ -181,8 +177,7 @@ class Job(Unpickable(err=nullobject,
         try:
             self.tries += 1
             self.working_time = 0
-            self.FireEvent("start")
-            self.wait_streams()
+            self.FireEvent("start", allow_defferred=False)
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
             run_args = [osspec.get_shell_location()] + (["-o", "pipefail"] if self.pipe_fail else []) \

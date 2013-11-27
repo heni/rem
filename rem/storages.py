@@ -339,11 +339,15 @@ class PacketNamesStorage(ICallbackAcceptor):
 
 class MessageStorage(object):
     Message = namedtuple('Message', 'acceptor emitter event ref')
-    message_queue = Queue()
 
     def __init__(self, scheduler=None):
+        self.message_queue = Queue()
         if scheduler:
             self.scheduler = weakref.proxy(scheduler)
+
+    def UpdateContext(self, context):
+        self.message_queue = Queue()
+        self.scheduler = weakref.proxy(context.Scheduler)
 
     def StoreMessage(self, acceptor, emitter, event, ref):
         self.message_queue.put(self.Message(acceptor, emitter, event, ref))
