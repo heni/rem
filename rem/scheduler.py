@@ -149,7 +149,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             q = self.qRef[qname] = Queue(qname)
             q.UpdateContext(self.context)
             q.AddCallbackListener(self)
-            self.messageStorage.add_holder(q)
+            self.messageStorage.AddHolder(q)
             self.qList.append(q)
             return q
 
@@ -207,7 +207,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             logging.exception("Backup error")
         finally:
             self.frozen(False)
-            self.messageStorage.sendall()
+            self.messageStorage.SendAll()
         os.rename(tmpFilename, filename)
         if self.context.useMemProfiler:
             try:
@@ -247,9 +247,9 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         for qname, q in qRef.iteritems():
             q.UpdateContext(self.context)
             q.AddCallbackListener(self)
-            self.messageStorage.add_holder(q)
+            self.messageStorage.AddHolder(q)
             for pck in list(q.ListAllPackets()):
-                self.messageStorage.add_holder(pck)
+                self.messageStorage.AddHolder(pck)
                 dstStorage = self.packStorage
                 pck.UpdateTagDependencies(self.tagRef)
                 if pck.directory and os.path.isdir(pck.directory):

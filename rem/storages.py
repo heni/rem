@@ -232,7 +232,7 @@ class TagStorage(object):
     def AcquireTag(self, tagname):
         if tagname:
             tag = self.RawTag(tagname)
-            self.conn_manager.scheduler.messageStorage.add_holder(tag)
+            self.conn_manager.scheduler.messageStorage.AddHolder(tag)
             with self.lock:
                 return TagWrapper(self.inmem_items.setdefault(tagname, tag))
 
@@ -277,7 +277,7 @@ class TagStorage(object):
         self.additional_listeners = set()
         self.additional_listeners.add(context.Scheduler.connManager)
         self.additional_listeners.add(self.tag_logger)
-        context.Scheduler.messageStorage.add_holder(self)
+        context.Scheduler.messageStorage.AddHolder(self)
 
     def Restore(self):
         self.tag_logger.Restore()
@@ -345,15 +345,15 @@ class MessageStorage(object):
         if scheduler:
             self.scheduler = weakref.proxy(scheduler)
 
-    def store_message(self, acceptor, emitter, event, ref):
+    def StoreMessage(self, acceptor, emitter, event, ref):
         self.message_queue.put(self.Message(acceptor, emitter, event, ref))
 
-    def sendall(self):
+    def SendAll(self):
         while not self.message_queue.empty():
             message = self.message_queue.get()
             message.acceptor().AcceptCallback(message.ref or message.emitter, message.event)
 
-    def add_holder(self, obj):
+    def AddHolder(self, obj):
         if isinstance(obj, CallbackHolder):
             obj.message_queue = self
 
