@@ -338,7 +338,7 @@ class PacketNamesStorage(ICallbackAcceptor):
 
 
 class MessageStorage(object):
-    Message = namedtuple('Message', 'acceptor emitter event ref')
+    Message = namedtuple('Message', 'acceptor event ref')
 
     def __init__(self, scheduler=None):
         self.message_queue = Queue()
@@ -349,13 +349,13 @@ class MessageStorage(object):
         self.message_queue = Queue()
         self.scheduler = weakref.proxy(context.Scheduler)
 
-    def StoreMessage(self, acceptor, emitter, event, ref):
-        self.message_queue.put(self.Message(acceptor, emitter, event, ref))
+    def StoreMessage(self, acceptor, event, ref):
+        self.message_queue.put(self.Message(acceptor, event, ref))
 
     def SendAll(self):
         while not self.message_queue.empty():
             message = self.message_queue.get()
-            message.acceptor().AcceptCallback(message.ref or message.emitter, message.event)
+            message.acceptor().AcceptCallback(message.ref, message.event)
 
     def AddHolder(self, obj):
         if isinstance(obj, CallbackHolder):
