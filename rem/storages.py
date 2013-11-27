@@ -9,13 +9,14 @@ import bsddb3
 import cPickle
 
 from common import *
-from callbacks import Tag, RemoteTag
+from callbacks import Tag, RemoteTag, CallbackHolder
 from journal import TagLogger
 from callbacks import ICallbackAcceptor
 from packet import PacketState, JobPacket
+from collections import namedtuple
+from Queue import Queue
 
-
-__all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage"]
+__all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage", "PacketNamesStorage", "MessageStorage"]
 
 
 class GlobalPacketStorage(object):
@@ -231,6 +232,7 @@ class TagStorage(object):
     def AcquireTag(self, tagname):
         if tagname:
             tag = self.RawTag(tagname)
+            self.conn_manager.scheduler.messageStorage.AddHolder(tag)
             with self.lock:
                 return TagWrapper(self.inmem_items.setdefault(tagname, tag))
 
@@ -275,6 +277,7 @@ class TagStorage(object):
         self.additional_listeners = set()
         self.additional_listeners.add(context.Scheduler.connManager)
         self.additional_listeners.add(self.tag_logger)
+        context.Scheduler.messageStorage.AddHolder(self)
 
     def Restore(self):
         self.tag_logger.Restore()
@@ -334,3 +337,31 @@ class PacketNamesStorage(ICallbackAcceptor):
         pass
 
 
+class MessageStorage(object):
+    Message = namedtuple('Message', 'acceptor event ref')
+
+    def __init__(self, scheduler=None):
+        self.message_queue = Queue()
+        if scheduler:
+            self.scheduler = weakref.proxy(scheduler)
+
+    def UpdateContext(self, context):
+        self.message_queue = Queue()
+        self.scheduler = weakref.proxy(context.Scheduler)
+
+    def StoreMessage(self, acceptor, event, ref):
+        self.message_queue.put(self.Message(acceptor, event, ref))
+
+    def SendAll(self):
+        while not self.message_queue.empty():
+            message = self.message_queue.get()
+            message.acceptor().AcceptCallback(message.ref, message.event)
+
+    def AddHolder(self, obj):
+        if isinstance(obj, CallbackHolder):
+            obj.message_queue = self
+        else:
+            logging.warning("Message queue:  %r\tincorrect holder found: %s", self, obj)
+
+    def __getstate__(self):
+        return {}

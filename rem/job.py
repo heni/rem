@@ -177,7 +177,7 @@ class Job(Unpickable(err=nullobject,
         try:
             self.tries += 1
             self.working_time = 0
-            self.FireEvent("start")
+            self.FireEvent("start", allow_defferred=False)
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
             run_args = [osspec.get_shell_location()] + (["-o", "pipefail"] if self.pipe_fail else []) \

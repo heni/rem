@@ -93,9 +93,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     pck = JobPacket(packet_name, priority, _context, notify_emails,
                     wait_tags=wait_tags, set_tag=_scheduler.tagRef.AcquireTag(set_tag),
                     kill_all_jobs_on_error=kill_all_jobs_on_error)
-    for tag in wait_tags:
-        _scheduler.connManager.Subscribe(tag)
-    _scheduler.tempStorage.StorePacket(pck)
+    _scheduler.RegisterNewPacket(pck, wait_tags)
     logging.info('packet %s registered as %s', packet_name, pck.id)
     return pck.id
 
@@ -121,7 +119,7 @@ def pck_addto_queue(pck_id, queue_name, packet_name_policy=constants.IGNORE_DUPL
         ex = DuplicatePackageNameException(packet_name, _context.network_name)
         raise xmlrpclib.Fault(1, ex.message)
     if pck is not None:
-        _scheduler.RegisterPacket(queue_name, pck)
+        _scheduler.AddPacketToQueue(queue_name, pck)
         return
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
@@ -454,6 +452,7 @@ class RemDaemon(object):
         self.scheduler.Start()
         self.regWorkers = [ThreadJobWorker(self.scheduler) for _ in xrange(self.scheduler.poolSize)]
         self.timeWorker = TimeTicker()
+        self.scheduler.messageStorage.AddHolder(self.timeWorker)
         self.timeWorker.AddCallbackListener(self.scheduler.schedWatcher)
         for worker in self.regWorkers + [self.timeWorker]:
             worker.start()

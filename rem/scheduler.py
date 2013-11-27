@@ -15,7 +15,7 @@ from rem import PacketCustomLogic
 from connmanager import ConnectionManager
 from packet import JobPacket, PacketState, PacketFlag
 from queue import Queue
-from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage
+from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage, MessageStorage
 from callbacks import ICallbackAcceptor
 
 
@@ -73,7 +73,9 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                            #storage with knowledge about nonassigned packets (packets that was created but not yet assigned to appropriate queue)
                            schedWatcher=SchedWatcher, #watcher for time scheduled events
                            connManager=ConnectionManager, #connections to others rems
-                           packetNamesTracker=PacketNamesStorage
+                           packetNamesTracker=PacketNamesStorage,
+                           messageStorage=MessageStorage,
+                           _frozen=(bool, False)
                         ),
                 ICallbackAcceptor):
     BackupFilenameMatchRe = re.compile("sched-\d*.dump$")
@@ -83,9 +85,24 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         getattr(super(Scheduler, self), "__init__")()
         self.UpdateContext(context)
         self.ObjectRegistratorClass = FakeObjectRegistrator if context.execMode == "start" else ObjectRegistrator
-        self.packetNamesTracker = PacketNamesStorage()
         if context.useMemProfiler:
             self.initProfiler()
+
+    def Freeze(self):
+        with self.lock:
+            self._frozen = True
+
+    def UnFreeze(self):
+        with self.lock:
+            self._frozen = False
+        self.messageStorage.SendAll()
+
+    def IsFrozen(self):
+        return self._frozen
+
+    def WaitUnfreeze(self):
+        while self.IsFrozen():
+            time.sleep(.01)
 
     def UpdateContext(self, context=None):
         if context is not None:
@@ -93,6 +110,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.poolSize = context.thread_pool_size
             self.initBackupSystem(context)
             context.registerScheduler(self)
+        self.messageStorage.UpdateContext(self.context)
         self.binStorage.UpdateContext(self.context)
         self.tagRef.UpdateContext(self.context)
         PacketCustomLogic.UpdateContext(self.context)
@@ -133,6 +151,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             q = self.qRef[qname] = Queue(qname)
             q.UpdateContext(self.context)
             q.AddCallbackListener(self)
+            self.messageStorage.AddHolder(q)
             self.qList.append(q)
             return q
 
@@ -173,17 +192,23 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def SaveData(self, filename):
         gc.collect()
-        sdict = {"qList": copy.copy(self.qList),
-                 "qRef": copy.copy(self.qRef),
-                 "tagRef": self.tagRef,
-                 "binStorage": self.binStorage,
-                 "tempStorage": self.tempStorage,
-                 "schedWatcher": self.schedWatcher,
-                 "connManager": self.connManager}
-        tmpFilename = filename + ".tmp"
-        with open(tmpFilename, "w") as backup_printer:
-            pickler = Pickler(backup_printer, 2)
-            pickler.dump(sdict)
+        self.Freeze()
+        try:
+            sdict = {"qList": copy.copy(self.qList),
+                     "qRef": copy.copy(self.qRef),
+                     "tagRef": self.tagRef,
+                     "binStorage": self.binStorage,
+                     "tempStorage": self.tempStorage,
+                     "schedWatcher": self.schedWatcher,
+                     "connManager": self.connManager}
+            tmpFilename = filename + ".tmp"
+            with open(tmpFilename, "w") as backup_printer:
+                pickler = Pickler(backup_printer, 2)
+                pickler.dump(sdict)
+        except:
+            logging.exception("Backup error")
+        finally:
+            self.UnFreeze()
         os.rename(tmpFilename, filename)
         if self.context.useMemProfiler:
             try:
@@ -221,7 +246,9 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         for qname, q in qRef.iteritems():
             q.UpdateContext(self.context)
             q.AddCallbackListener(self)
+            self.messageStorage.AddHolder(q)
             for pck in list(q.ListAllPackets()):
+                self.messageStorage.AddHolder(pck)
                 dstStorage = self.packStorage
                 pck.UpdateTagDependencies(self.tagRef)
                 if pck.directory and os.path.isdir(pck.directory):
@@ -256,12 +283,18 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 q.Resume(resumeWorkable=True)
             self.qRef[qname] = q
 
-    def RegisterPacket(self, qname, pck):
+    def AddPacketToQueue(self, qname, pck):
         queue = self.Queue(qname)
         self.packStorage.Add(pck)
         queue.Add(pck)
         self.packetNamesTracker.Add(pck.name)
         pck.AddCallbackListener(self.packetNamesTracker)
+
+    def RegisterNewPacket(self, pck, wait_tags):
+        for tag in wait_tags:
+            self.connManager.Subscribe(tag)
+        self.tempStorage.StorePacket(pck)
+        self.messageStorage.AddHolder(pck)
 
     def GetPacket(self, pck_id):
         return self.packStorage.GetPacket(pck_id)
@@ -279,3 +312,5 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def GetConnectionManager(self):
         return self.connManager
+
+

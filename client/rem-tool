@@ -156,10 +156,15 @@ class MoveCommander(ICommander):
         pck.MoveToQueue(src_q, dest_q)
 
 
-if __name__ == "__main__":
+def main():
     opt, args = parse_args()
     disp_commands = {"list": ListCommander, "suspend": LifeCommander, "resume": LifeCommander, "restart": LifeCommander,
-                     "status": StatusCommander, "update": UpdateCommander, "delete": LifeCommander, "set": TagManipCommander, 
+                     "status": StatusCommander, "update": UpdateCommander, "delete": LifeCommander,
+                     "set": TagManipCommander,
                      "unset": TagManipCommander, "move": MoveCommander, "stop": LifeCommander}
     commander = disp_commands[args[0]](opt, args)
     commander()
+
+
+if __name__ == "__main__":
+    main()
