@@ -360,6 +360,8 @@ class MessageStorage(object):
     def AddHolder(self, obj):
         if isinstance(obj, CallbackHolder):
             obj.message_queue = self
+        else:
+            logging.warning("callback %r\tincorrect acceptor found: %s", self, obj)
 
     def __getstate__(self):
         return {}
