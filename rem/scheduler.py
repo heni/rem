@@ -207,12 +207,12 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 pickler.dump(sdict)
         except:
             logging.exception("Backup error")
-            fname = os.path.join(self.backupDirectory, filename)
-            if os.path.exists(fname):
-                os.unlink(fname)
+            if os.path.exists(tmpFilename):
+                os.unlink(tmpFilename)
         finally:
             self.UnFreeze()
-        os.rename(tmpFilename, filename)
+        if os.path.exists(tmpFilename):
+            os.rename(tmpFilename, filename)
         if self.context.useMemProfiler:
             try:
                 last_heap = self.LastHeap
