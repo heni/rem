@@ -177,7 +177,7 @@ class Job(Unpickable(err=nullobject,
         try:
             self.tries += 1
             self.working_time = 0
-            self.FireEvent("start")
+            self.FireEvent("start", allow_defferred=False)
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
             run_args = [osspec.get_shell_location()] + (["-o", "pipefail"] if self.pipe_fail else []) \
@@ -215,18 +215,15 @@ class Job(Unpickable(err=nullobject,
             try:
                 stream = fn()
                 if stream is not None:
-                    try:
-                        if isinstance(stream, file):
-                            if not stream.closed:
-                                stream.close()
-                        elif isinstance(stream, int):
-                            os.close(stream)
-                        else:
-                            raise RuntimeError("can't close unknown file object %r" % stream)
-                    except Exception, e:
-                        logging.debug(e.message)
-            except Exception, e:
-                logging.exception("%s", e)
+                    if isinstance(stream, file):
+                        if not stream.closed:
+                            stream.close()
+                    elif isinstance(stream, int):
+                        os.close(stream)
+                    else:
+                        raise RuntimeError("can't close unknown file object %r" % stream)
+            except:
+                logging.exception('close stream error')
 
     def Terminate(self):
         pids = getattr(self, "pids", None)
