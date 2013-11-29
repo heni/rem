@@ -89,19 +89,16 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.initProfiler()
 
     def Freeze(self):
-        return
-        #with self.lock:
-        #    self._frozen = True
+        with self.lock:
+            self._frozen = True
 
     def UnFreeze(self):
-        return
-        #with self.lock:
-        #self._frozen = False
-        #self.messageStorage.SendAll()
+        with self.lock:
+            self._frozen = False
+        self.messageStorage.SendAll()
 
     def IsFrozen(self):
-        return False
-        #return self._frozen
+        return self._frozen
 
     def WaitUnfreeze(self):
         while self.IsFrozen():

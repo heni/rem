@@ -358,10 +358,11 @@ class MessageStorage(object):
             message.acceptor().AcceptCallback(message.ref, message.event)
 
     def AddHolder(self, obj):
-        if isinstance(obj, CallbackHolder):
-            obj.message_queue = self
-        else:
-            logging.warning("Message queue:  %s\tincorrect holder found: %s", self, obj)
+        return
+        #if isinstance(obj, CallbackHolder):
+        #    obj.message_queue = self
+        #else:
+        #    logging.warning("Message queue:  %s\tincorrect holder found: %s", self, obj)
 
     def __getstate__(self):
         return {}
