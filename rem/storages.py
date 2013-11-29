@@ -358,7 +358,6 @@ class MessageStorage(object):
             message.acceptor().AcceptCallback(message.ref, message.event)
 
     def AddHolder(self, obj):
-        return
         if isinstance(obj, CallbackHolder):
             obj.message_queue = self
         else:
