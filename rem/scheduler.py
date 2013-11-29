@@ -98,7 +98,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.messageStorage.SendAll()
 
     def IsFrozen(self):
-        return self._frozen
+        return False
+        #return self._frozen
 
     def WaitUnfreeze(self):
         while self.IsFrozen():
@@ -192,7 +193,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def SaveData(self, filename):
         gc.collect()
-        self.Freeze()
+        #self.Freeze()
         try:
             sdict = {"qList": copy.copy(self.qList),
                      "qRef": copy.copy(self.qRef),
@@ -210,7 +211,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             if os.path.exists(tmpFilename):
                 os.unlink(tmpFilename)
         finally:
-            self.UnFreeze()
+            #self.UnFreeze()
+            pass
         if os.path.exists(tmpFilename):
             os.rename(tmpFilename, filename)
         if self.context.useMemProfiler:
@@ -315,5 +317,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def GetConnectionManager(self):
         return self.connManager
+
 
 
