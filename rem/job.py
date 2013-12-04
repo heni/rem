@@ -113,6 +113,24 @@ class Job(Unpickable(err=nullobject,
     def __read_stream(fh, buffer):
         buffer.append(fh.read())
 
+    #copy-paste from multiprocessing/forking.py
+    def popen_wait(self, process, timeout=None):
+        if timeout is None:
+            return process.poll()
+        deadline = time.time() + timeout
+        delay = 0.0005
+        res = None
+        while 1:
+            res = process.poll()
+            if res is not None:
+                break
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            delay = min(delay * 2, remaining, 0.05)
+            time.sleep(delay)
+        return res
+
     def __wait_process(self, process, err_pipe):
         out = []
         stderrReadThread = threading.Thread(target=Job.__read_stream, args=(err_pipe, out))
@@ -127,13 +145,15 @@ class Job(Unpickable(err=nullobject,
         while poll() is None:
             self.working_time += _time() - last_update_time
             last_update_time = _time()
-            if self.working_time > self.notify_timeout and not self._notified:
-                self._timeoutNotify()
-            if self.working_time > self.max_working_time:
-                process.kill()
-                self.results.append(TimeOutExceededResult(self.id))
-                time.sleep(0.001)
-                break
+            if self.working_time < self.notify_timeout < self.max_working_time and not self._notified:
+                if self.popen_wait(process, self.notify_timeout - self.working_time) is None:
+                    self._timeoutNotify()
+
+            elif self.working_time < self.max_working_time:
+                if self.popen_wait(process, self.max_working_time - self.working_time) is None:
+                    process.kill()
+                    self.results.append(TimeOutExceededResult(self.id))
+                    break
             time.sleep(0.001)
         stderrReadThread.join()
         return "", out[0]
@@ -177,11 +197,12 @@ class Job(Unpickable(err=nullobject,
         try:
             self.tries += 1
             self.working_time = 0
-            self.FireEvent("start", allow_defferred=False)
+            self.FireEvent("start")
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
             run_args = [osspec.get_shell_location()] + (["-o", "pipefail"] if self.pipe_fail else []) \
                        + ["-c", self.shell]
+            logging.debug("out: %s, in: %s", self.output, self.input)
             process = subprocess.Popen(run_args, stdout=self.output.fileno(), stdin=self.input.fileno(),
                                        stderr=self.errPipe[1].fileno(), close_fds=True, cwd=self.packetRef.directory,
                                        preexec_fn=os.setpgrp)

@@ -32,17 +32,10 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
         if obj in self.nonpersistent_callbacks:
             del self.nonpersistent_callbacks[obj]
 
-    def FireEvent(self, event, reference=None, allow_defferred=True):
+    def FireEvent(self, event, reference=None):
         bad_listeners = set()
-        scheduler = self.message_queue.scheduler if hasattr(self, 'message_queue') and hasattr(self.message_queue, 'scheduler') else None
         for obj in itertools.chain(self.callbacks.keyrefs(), self.nonpersistent_callbacks.keyrefs()):
             if isinstance(obj(), ICallbackAcceptor):
-                if scheduler is not None and scheduler.IsFrozen():
-                    if not allow_defferred:
-                        scheduler.WaitUnfreeze()
-                    else:
-                        self.message_queue.StoreMessage(acceptor=obj, event=event, ref=reference or self)
-                        continue
                 obj().AcceptCallback(reference or self, event)
             else:
                 logging.warning("callback %r\tincorrect acceptor found: %s", self, obj())

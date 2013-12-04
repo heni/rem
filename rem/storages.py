@@ -232,7 +232,6 @@ class TagStorage(object):
     def AcquireTag(self, tagname):
         if tagname:
             tag = self.RawTag(tagname)
-            self.conn_manager.scheduler.messageStorage.AddHolder(tag)
             with self.lock:
                 return TagWrapper(self.inmem_items.setdefault(tagname, tag))
 
@@ -243,6 +242,8 @@ class TagStorage(object):
                 tagDescr = self.infile_items.get(tagname, None)
                 if tagDescr:
                     tag = cPickle.loads(tagDescr)
+                    if hasattr(tag, 'message_queue'):
+                        del tag.message_queue
                 else:
                     tag = RemoteTag(tagname) if self.IsRemoteName(tagname) else Tag(tagname)
             for obj in self.additional_listeners:
@@ -277,7 +278,6 @@ class TagStorage(object):
         self.additional_listeners = set()
         self.additional_listeners.add(context.Scheduler.connManager)
         self.additional_listeners.add(self.tag_logger)
-        context.Scheduler.messageStorage.AddHolder(self)
 
     def Restore(self):
         self.tag_logger.Restore()
@@ -316,10 +316,7 @@ class PacketNamesStorage(ICallbackAcceptor):
             self.names.update(names_list or [])
 
     def Exist(self, pck_name):
-        exist = False
-        with self.lock:
-            exist = pck_name in self.names
-        return exist
+        return pck_name in self.names
 
     def Delete(self, pck_name):
         with self.lock:
@@ -338,30 +335,4 @@ class PacketNamesStorage(ICallbackAcceptor):
 
 
 class MessageStorage(object):
-    Message = namedtuple('Message', 'acceptor event ref')
-
-    def __init__(self, scheduler=None):
-        self.message_queue = Queue()
-        if scheduler:
-            self.scheduler = weakref.proxy(scheduler)
-
-    def UpdateContext(self, context):
-        self.message_queue = Queue()
-        self.scheduler = weakref.proxy(context.Scheduler)
-
-    def StoreMessage(self, acceptor, event, ref):
-        self.message_queue.put(self.Message(acceptor, event, ref))
-
-    def SendAll(self):
-        while not self.message_queue.empty():
-            message = self.message_queue.get()
-            message.acceptor().AcceptCallback(message.ref, message.event)
-
-    def AddHolder(self, obj):
-        if isinstance(obj, CallbackHolder):
-            obj.message_queue = self
-        else:
-            logging.warning("Message queue:  %s\tincorrect holder found: %s", self, obj)
-
-    def __getstate__(self):
-        return {}
+    pass
