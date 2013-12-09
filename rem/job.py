@@ -127,7 +127,7 @@ class Job(Unpickable(err=nullobject,
             remaining = deadline - time.time()
             if remaining <= 0:
                 break
-            delay = min(delay * 2, remaining, 0.05)
+            delay = min(delay * 2, remaining, constants.JOB_WATCHER_MAX_DELAY)
             time.sleep(delay)
         return res
 
@@ -139,18 +139,18 @@ class Job(Unpickable(err=nullobject,
         if process.stdin:
             process.stdin.close()
         last_update_time = time.time()
-        self.working_time = 0
+        working_time = 0
         poll = process.poll
         _time = time.time
         while poll() is None:
-            self.working_time += _time() - last_update_time
+            working_time += _time() - last_update_time
             last_update_time = _time()
-            if self.working_time < self.notify_timeout < self.max_working_time and not self._notified:
-                if self.popen_wait(process, self.notify_timeout - self.working_time) is None:
-                    self._timeoutNotify()
+            if working_time < self.notify_timeout < self.max_working_time and not self._notified:
+                if self.popen_wait(process, self.notify_timeout - working_time) is None:
+                    self._timeoutNotify(working_time + _time() - last_update_time)
 
-            elif self.working_time < self.max_working_time:
-                if self.popen_wait(process, self.max_working_time - self.working_time) is None:
+            elif working_time < self.max_working_time:
+                if self.popen_wait(process, self.max_working_time - working_time) is None:
                     process.kill()
                     self.results.append(TimeOutExceededResult(self.id))
                     break
@@ -158,7 +158,8 @@ class Job(Unpickable(err=nullobject,
         stderrReadThread.join()
         return "", out[0]
 
-    def _timeoutNotify(self):
+    def _timeoutNotify(self, working_time):
+        self.cached_working_time = working_time
         msgHelper = packet.PacketCustomLogic(self.packetRef).DoLongExecutionWarning(self)
         SendEmail(self.packetRef.notify_emails, msgHelper)
         self._notified = True
