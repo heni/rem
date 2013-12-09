@@ -452,7 +452,6 @@ class RemDaemon(object):
         self.scheduler.Start()
         self.regWorkers = [ThreadJobWorker(self.scheduler) for _ in xrange(self.scheduler.poolSize)]
         self.timeWorker = TimeTicker()
-        self.scheduler.messageStorage.AddHolder(self.timeWorker)
         self.timeWorker.AddCallbackListener(self.scheduler.schedWatcher)
         for worker in self.regWorkers + [self.timeWorker]:
             worker.start()
