@@ -30,15 +30,13 @@ def logged(func):
     return f
 
 
-def traced_rpc_method(level="debug", blocker=None):
+def traced_rpc_method(level="debug"):
     log_method = getattr(logging, level)
     assert callable(log_method)
 
     def traced_rpc_method(func):
         def f(*args):
             try:
-                if blocker is not None:
-                    blocker.WaitUnfreeze()
                 return func(*args)
             except:
                 logging.exception("")

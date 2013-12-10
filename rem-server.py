@@ -80,7 +80,7 @@ def readonly_method(func):
     return func
 
 
-@traced_rpc_method("info", blocker=_scheduler)
+@traced_rpc_method("info")
 def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY):
     if packet_name_policy & constants.DENY_DUPLICATE_NAMES_POLICY and _scheduler.packetNamesTracker.Exist(packet_name):
         ex = DuplicatePackageNameException(packet_name, _context.network_name)
@@ -98,7 +98,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     return pck.id
 
 
-@traced_rpc_method(blocker=_scheduler)
+@traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
                 max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
@@ -111,7 +111,7 @@ def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info", blocker=_scheduler)
+@traced_rpc_method("info")
 def pck_addto_queue(pck_id, queue_name, packet_name_policy=constants.IGNORE_DUPLICATE_NAMES_POLICY):
     pck = _scheduler.tempStorage.PickPacket(pck_id)
     packet_name = pck.name
@@ -142,18 +142,18 @@ def check_tag(tagname):
     return _scheduler.tagRef.CheckTag(tagname)
 
 
-@traced_rpc_method("info", blocker=_scheduler)
+@traced_rpc_method("info")
 def set_tag(tagname):
     return _scheduler.tagRef.SetTag(tagname)
 
 
-@traced_rpc_method("info", blocker=_scheduler)
+@traced_rpc_method("info")
 def unset_tag(tagname):
     return _scheduler.tagRef.UnsetTag(tagname)
 
 
 @traced_rpc_method()
-def reset_tag(tagname, blocker=_scheduler):
+def reset_tag(tagname):
     tag = _scheduler.tagRef.AcquireTag(tagname)
     tag.Reset()
 
@@ -202,7 +202,7 @@ def queue_change_limit(queue_name, limit):
 
 
 @traced_rpc_method("info")
-def queue_delete(queue_name, blocker=_scheduler):
+def queue_delete(queue_name):
     return _scheduler.DeleteUnusedQueue(queue_name)
 
 
@@ -237,7 +237,7 @@ def pck_status(pck_id):
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info", blocker=_scheduler)
+@traced_rpc_method("info")
 def pck_suspend(pck_id, kill_jobs=False):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -253,7 +253,7 @@ def pck_resume(pck_id):
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info", blocker=_scheduler)
+@traced_rpc_method("info")
 def pck_delete(pck_id):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -263,7 +263,7 @@ def pck_delete(pck_id):
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info", blocker=_scheduler)
+@traced_rpc_method("info")
 def pck_reset(pck_id):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -279,12 +279,12 @@ def check_binary_exist(checksum):
     return _scheduler.binStorage.HasBinary(checksum)
 
 
-@traced_rpc_method("info", blocker=_scheduler)
+@traced_rpc_method("info")
 def save_binary(bindata):
     _scheduler.binStorage.CreateFile(bindata.data)
 
 
-@traced_rpc_method("info", blocker=_scheduler)
+@traced_rpc_method("info")
 def check_binary_and_lock(checksum, localPath, tryLock=None):
     if tryLock is None:
         return _scheduler.binStorage.HasBinary(checksum) \
@@ -293,7 +293,7 @@ def check_binary_and_lock(checksum, localPath, tryLock=None):
         raise NotImplementedError('tryLock==True branch is not implemented yet!')
 
 
-@traced_rpc_method(blocker=_scheduler)
+@traced_rpc_method()
 def pck_add_binary(pck_id, binname, checksum):
     pck = _scheduler.tempStorage.GetPacket(pck_id) or _scheduler.GetPacket(pck_id)
     file = _scheduler.binStorage.GetFileByHash(checksum)
@@ -452,7 +452,6 @@ class RemDaemon(object):
         self.scheduler.Start()
         self.regWorkers = [ThreadJobWorker(self.scheduler) for _ in xrange(self.scheduler.poolSize)]
         self.timeWorker = TimeTicker()
-        self.scheduler.messageStorage.AddHolder(self.timeWorker)
         self.timeWorker.AddCallbackListener(self.scheduler.schedWatcher)
         for worker in self.regWorkers + [self.timeWorker]:
             worker.start()
