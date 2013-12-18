@@ -37,7 +37,7 @@ class KillableWorker(threading.Thread):
 
 
 class ThreadJobWorker(KillableWorker):
-    TICK_PERIOD = 0.01
+    TICK_PERIOD = 0.1
 
     def __init__(self, queue):
         super(ThreadJobWorker, self).__init__()

@@ -597,7 +597,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             logging.exception('Close stream error')
 
     def KillJobs(self):
-        #self.CloseStreams()
+        self.CloseStreams()
         for job in self.GetWorkingJobs():
             job.Terminate()
 

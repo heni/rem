@@ -138,7 +138,7 @@ class TooLongWorkingWarning(IMessageHelper):
         print >> mbuf, "packet id:", self.pck.id
         print >> mbuf, "job id:", self.job.id
         print >> mbuf, "job wait limit:", self.job.notify_timeout
-        print >> mbuf, "job working time:", self.job.working_time, 'sec'
+        print >> mbuf, "job working time:", self.job.cached_working_time, 'sec'
         print >> mbuf, "Extended packet status:"
         p_state = self.pck.Status()
         print >> mbuf, "\n".join("%s: %s" % (k, v) for k, v in p_state.iteritems() if k not in ("jobs", "history"))
