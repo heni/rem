@@ -440,7 +440,7 @@ class RemDaemon(object):
             #kill running tasks
             map(lambda worker: worker.Kill(), self.regWorkers)
             import multiprocessing
-            logging.debug("{} children founded after custom kill", len(multiprocessing.active_children()))
+            logging.debug("%s children founded after custom kill", len(multiprocessing.active_children()))
             for proc in multiprocessing.active_children():
                 proc.terminate()
 
