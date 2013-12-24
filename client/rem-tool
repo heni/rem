@@ -43,7 +43,11 @@ class ICommander(object):
 def print_pck_info(pck, extended=False):
     workTime = pck.GetWorkingTime()
     hd = "packet '%s':" % pck.pck_id
-    print "%s\tname=%s,state=%s;wait=%r,priority=%s;working_time=%s;result_tag=%s" % (hd, pck.name, pck.state, pck.wait, pck.priority, workTime, pck.result_tag)
+    print "%s\tname=%s,state=%s;wait=%r,priority=%s;working_time=%s;result_tag=%s;last_update='%s'" \
+        % (hd, pck.name, pck.state, 
+           pck.wait, pck.priority, workTime, pck.result_tag, 
+           time.strftime("%Y/%m/%d-%H:%M:%S", time.localtime(pck.history[-1][1]) if pck.history else "none"),
+          )
     for job in pck.jobs:
         if job.state == "working": print "%sexec_shell=%s" % (" " * len(hd), job.shell)
     if extended:
