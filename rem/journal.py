@@ -48,6 +48,8 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
 
     def LockedAppend(self, data):
         if not self.restoring_mode:
+            if not self.file or not self.file.isOpen():
+                self.Open(self.db_file)
             with self.lock:
                 try:
                     key = self.file.last()[0] + 1

@@ -239,6 +239,7 @@ class TagStorage(object):
         if tagname:
             tag = self.inmem_items.get(tagname, None)
             if tag is None:
+                self.DBConnect()
                 tagDescr = self.infile_items.get(tagname, None)
                 if tagDescr:
                     tag = cPickle.loads(tagDescr)
@@ -270,9 +271,13 @@ class TagStorage(object):
             pass
         inner_db.close()
 
+    def DBConnect(self):
+        if not self.infile_items or not self.infile_items.isOpen():
+            self.infile_items = bsddb3.btopen(self.db_file, "c")
+
     def UpdateContext(self, context):
         self.db_file = context.tags_db_file
-        self.infile_items = bsddb3.btopen(context.tags_db_file, "c")
+        self.DBConnect()
         self.conn_manager = context.Scheduler.connManager
         self.tag_logger.UpdateContext(context)
         self.additional_listeners = set()
