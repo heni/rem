@@ -163,6 +163,7 @@ class T02(unittest.TestCase):
         pckInfo.Stop()
         popen = subprocess.Popen(["ps", "x", "-o", "command"], stdout=subprocess.PIPE)
         logging.info("")
+        time.sleep(0.2)
         self.assertEqual(contains(popen.stdout, "12344321"), False)
         pckInfo.Delete()
 

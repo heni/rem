@@ -53,6 +53,12 @@ class CommandLineResult(IResult):
                                max_err_len / 2 if max_err_len else None) if err else ""))
 
 
+class JobStartErrorResult(CommandLineResult):
+    def __init__(self, jobId, exception_message):
+        ts = datetime.datetime.fromtimestamp(time.time())
+        IResult.__init__(self, "Job start error", 1, "Job %s start error at %s, error message: %s" % (jobId, ts.strftime(self.time_format), exception_message))
+
+
 class TriesExceededResult(IResult):
     def __init__(self, maxcount):
         IResult.__init__(self, "The number of attempts exceeded", maxcount, None)
@@ -219,6 +225,8 @@ class Job(Unpickable(err=nullobject,
             jobResult = CommandLineResult(retCode, startTime, time.localtime(), err,
                                        getattr(self, "max_err_len", None))
         except Exception, e:
+            if not jobPid:
+                jobResult = JobStartErrorResult(None, e.message)
             logging.exception("Run job %s exception: %s", self.id, e)
 
         finally:
