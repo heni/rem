@@ -10,6 +10,23 @@ import sys
 import threading
 import time
 
+import time
+
+
+def shall_execute(f):
+    def func(*args, **kwargs):
+        penalty = 0.01
+        penalty_factor = 5
+        while True:
+            try:
+                f(*args, **kwargs)
+                break
+            except:
+                time.sleep(penalty)
+                penalty = min(penalty * penalty_factor, 5)
+
+    return func
+
 
 class Signals(object):
     def __init__(self):
@@ -102,6 +119,7 @@ def get_shell_location(_cache=[]):
     return _cache[0]
 
 
+@shall_execute
 def send_email(emails, subject, message):
     sender = subprocess.Popen(["sendmail"] + map(str, emails), stdin=subprocess.PIPE)
     print >> sender.stdin, \
