@@ -242,9 +242,9 @@ class Job(Unpickable(err=nullobject,
             lambda: self.errPipe[1] if self.errPipe else None
         )
         for fn in closingStreamGenerators:
-            try:
-                stream = fn()
-                if stream is not None:
+            stream = fn()
+            if stream is not None:
+                try:
                     if isinstance(stream, file):
                         if not stream.closed:
                             stream.close()
@@ -252,8 +252,8 @@ class Job(Unpickable(err=nullobject,
                         os.close(stream)
                     else:
                         raise RuntimeError("can't close unknown file object %r" % stream)
-            except:
-                logging.exception('close stream error')
+                except:
+                    logging.exception('close stream error')
 
     def Terminate(self):
         pids = getattr(self, "pids", None)

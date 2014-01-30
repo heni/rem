@@ -11,7 +11,7 @@ import threading
 import time
 
 
-def shall_execute(f):
+def should_execute(f):
     def func(*args, **kwargs):
         penalty = 0.01
         penalty_factor = 5
@@ -117,7 +117,7 @@ def get_shell_location(_cache=[]):
     return _cache[0]
 
 
-@shall_execute
+@should_execute
 def send_email(emails, subject, message):
     sender = subprocess.Popen(["sendmail"] + map(str, emails), stdin=subprocess.PIPE)
     print >> sender.stdin, \
