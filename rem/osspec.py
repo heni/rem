@@ -11,19 +11,27 @@ import threading
 import time
 
 
-def should_execute(f):
-    def func(*args, **kwargs):
-        penalty = 0.01
-        penalty_factor = 5
-        while True:
-            try:
-                f(*args, **kwargs)
-                break
-            except:
-                time.sleep(penalty)
-                penalty = min(penalty * penalty_factor, 5)
+def should_execute_maker(max_tries=20, penalty_factor=5, *exception_list):
+    exception_list = exception_list or []
 
-    return func
+    def should_execute(f):
+        tries = max_tries
+
+        def func(*args, **kwargs):
+            penalty = 0.01
+            _tries = tries
+            while _tries:
+                try:
+                    return f(*args, **kwargs)
+                    break
+                except tuple(exception_list), e:
+                    time.sleep(penalty)
+                    penalty = min(penalty * penalty_factor, 5)
+                    _tries -= 1
+                    logging.error('Exception in %s, exception message: %s, attempts left:  %s', f.func_name, e.message, _tries)
+
+        return func
+    return should_execute
 
 
 class Signals(object):
@@ -117,7 +125,7 @@ def get_shell_location(_cache=[]):
     return _cache[0]
 
 
-@should_execute
+@should_execute_maker(20, 5, Exception)
 def send_email(emails, subject, message):
     sender = subprocess.Popen(["sendmail"] + map(str, emails), stdin=subprocess.PIPE)
     print >> sender.stdin, \

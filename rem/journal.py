@@ -51,13 +51,15 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
     def LockedAppend(self, data):
         if not self.restoring_mode:
             if not self.file_opened:
-                self.Open(self.db_file)
+                with self.lock:
+                    self.Open(self.db_file)
             with self.lock:
                 try:
                     key = self.file.last()[0] + 1
                 except bsddb3.error as e:
                     if 'BSDDB object has already been closed' in e.message:
                         self.file_opened = False
+                        self.file = None
                         raise
                     else:
                         key = 1

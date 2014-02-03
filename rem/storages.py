@@ -299,7 +299,8 @@ class TagStorage(object):
             if tag.GetListenersNumber() == 0 and sys.getrefcount(tag) == 4:
                 old_tags.add(name)
         if not self.db_file_opened:
-            self.DBConnect()
+            with self.lock:
+                self.DBConnect()
         with self.lock:
             for name in old_tags:
                 tag = self.inmem_items.pop(name)
@@ -309,6 +310,7 @@ class TagStorage(object):
                 except bsddb3.error as e:
                     if 'BSDDB object has already been closed' in e.message:
                         self.db_file_opened = False
+                        self.db_file = None
                     raise
             self.infile_items.sync()
 
