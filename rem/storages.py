@@ -186,13 +186,14 @@ class TagWrapper(object):
 
 
 class TagStorage(object):
-    __slots__ = ["db_file", "infile_items", "inmem_items", "lock", "additional_listeners", "conn_manager", "tag_logger"]
+    __slots__ = ["db_file", "infile_items", "inmem_items", "lock", "additional_listeners", "conn_manager", "tag_logger", 'db_file_opened']
 
     def __init__(self, *args):
         self.lock = PickableLock()
         self.inmem_items = {}
         self.infile_items = None
         self.db_file = ""
+        self.db_file_opened = False
         self.additional_listeners = set()
         self.tag_logger = TagLogger(self)
         if len(args) == 1:
@@ -239,6 +240,8 @@ class TagStorage(object):
         if tagname:
             tag = self.inmem_items.get(tagname, None)
             if tag is None:
+                if not self.db_file_opened:
+                    self.DBConnect()
                 tagDescr = self.infile_items.get(tagname, None)
                 if tagDescr:
                     tag = cPickle.loads(tagDescr)
@@ -270,9 +273,13 @@ class TagStorage(object):
             pass
         inner_db.close()
 
+    def DBConnect(self):
+        self.infile_items = bsddb3.btopen(self.db_file, "c")
+        self.db_file_opened = True
+
     def UpdateContext(self, context):
         self.db_file = context.tags_db_file
-        self.infile_items = bsddb3.btopen(context.tags_db_file, "c")
+        self.DBConnect()
         self.conn_manager = context.Scheduler.connManager
         self.tag_logger.UpdateContext(context)
         self.additional_listeners = set()
@@ -291,11 +298,20 @@ class TagStorage(object):
             #tag for removing have no listeners and have no external links for himself (actualy 4 links)
             if tag.GetListenersNumber() == 0 and sys.getrefcount(tag) == 4:
                 old_tags.add(name)
+        if not self.db_file_opened:
+            with self.lock:
+                self.DBConnect()
         with self.lock:
             for name in old_tags:
                 tag = self.inmem_items.pop(name)
                 tag.callbacks.clear()
-                self.infile_items[name] = cPickle.dumps(tag)
+                try:
+                    self.infile_items[name] = cPickle.dumps(tag)
+                except bsddb3.error as e:
+                    if 'BSDDB object has already been closed' in e.message:
+                        self.db_file_opened = False
+                        self.db_file = None
+                    raise
             self.infile_items.sync()
 
 
