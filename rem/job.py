@@ -188,7 +188,7 @@ class Job(Unpickable(err=nullobject,
                     logging.info("Job`s %s result: TriesExceededResult", self.id)
                     self.results.append(TriesExceededResult(self.tries))
                 if self.packetRef.kill_all_jobs_on_error:
-                    self.packetRef.UserSuspend(kill_jobs=True)
+                    self.packetRef.Suspend(kill_jobs=True)
                     self.packetRef.changeState(packet.PacketState.ERROR)
         except:
             logging.exception("some error during job finalization")
@@ -226,7 +226,7 @@ class Job(Unpickable(err=nullobject,
                                        getattr(self, "max_err_len", None))
         except Exception, e:
             if not jobPid:
-                jobResult = JobStartErrorResult(None, e)
+                jobResult = JobStartErrorResult(None, str(e))
             logging.exception("Run job %s exception: %s", self.id, e)
 
         finally:
