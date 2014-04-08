@@ -614,6 +614,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.done.clear()
         for job in self.jobs.values():
             job.results = []
+        self.UserResume()
 
     def OnReset(self, ref):
         if isinstance(ref, Tag):

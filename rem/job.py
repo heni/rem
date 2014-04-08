@@ -226,7 +226,7 @@ class Job(Unpickable(err=nullobject,
                                        getattr(self, "max_err_len", None))
         except Exception, e:
             if not jobPid:
-                jobResult = JobStartErrorResult(None, e.message)
+                jobResult = JobStartErrorResult(None, e)
             logging.exception("Run job %s exception: %s", self.id, e)
 
         finally:
