@@ -569,6 +569,9 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
 
     def UserSuspend(self, kill_jobs=False):
         self.SetFlag(PacketFlag.USER_SUSPEND)
+        self.Suspend(kill_jobs)
+
+    def Suspend(self, kill_jobs=False):
         self.changeState(PacketState.SUSPENDED)
         if kill_jobs:
             self.KillJobs()
@@ -614,6 +617,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.done.clear()
         for job in self.jobs.values():
             job.results = []
+        self.Resume()
 
     def OnReset(self, ref):
         if isinstance(ref, Tag):
