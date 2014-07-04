@@ -20,7 +20,7 @@ from rem import *
 class DuplicatePackageNameException(Exception):
     def __init__(self, pck_name, serv_name, *args, **kwargs):
         super(DuplicatePackageNameException, self).__init__(*args, **kwargs)
-        self.message = 'DuplicatePackageNameException: Packet with name %s already exits in REM[%s]' % (pck_name, serv_name)
+        self.message = 'DuplicatePackageNameException: Packet with name %s already exists in REM[%s]' % (pck_name, serv_name)
 
 
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
