@@ -104,13 +104,13 @@ MAX_PRIORITY = 2**31 - 1
 
 
 def _get_prefix(regexp):
-    prefix_lenght = 0
-    regexp_lenght = len(regexp)
-    while prefix_lenght < regexp_lenght:
-        if regexp[prefix_lenght] in sre_parse.SPECIAL_CHARS:
+    prefix_length = 0
+    regexp_length = len(regexp)
+    while prefix_length < regexp_length:
+        if regexp[prefix_length] in sre_parse.SPECIAL_CHARS:
             break
-        prefix_lenght += 1
-    return regexp[:prefix_lenght] or None
+        prefix_length += 1
+    return regexp[:prefix_length] or None
 
 
 class DuplicatePackageNameException(Exception):
