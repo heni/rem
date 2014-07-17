@@ -97,6 +97,11 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     logging.info('packet %s registered as %s', packet_name, pck.id)
     return pck.id
 
+@traced_rpc_method("info")
+def add_wait_tag(pck_id, tagname):
+    tag = _scheduler.tagRef.AcquireTag(tagname)
+    packet = _scheduler.tempStorage.GetPacket(pck_id) or _scheduler.packStorage.GetPacket(pck_id)
+    packet.AddWaitTag(tag)
 
 @traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
@@ -376,6 +381,7 @@ class RemServer(object):
         self.register_function(pck_add_binary, "pck_add_binary")
         self.register_function(pck_list_files, "pck_list_files")
         self.register_function(pck_get_file, "pck_get_file")
+        self.register_function(add_wait_tag, "add_wait_tag")
 
     def request_processor(self):
         rpc_fd = self.rpcserver.fileno()

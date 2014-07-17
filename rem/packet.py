@@ -108,6 +108,15 @@ class JobPacketImpl(object):
         self.allTags = set(tag.GetFullname() for tag in wait_tags)
         self.waitTags = set(tag.GetFullname() for tag in wait_tags if not tag.IsSet())
 
+    def AddWaitTag(self, tag):
+        if self.state not in [PacketState.SUSPENDED, PacketState.CREATEDP, PacketState.ERROR, PacketState.NONINITIALIZED]:
+            logging.error("You can`t add new wait tag, when packet workable")
+            raise RuntimeError("You can`t add new wait tag, when packet workable")
+        tag.AddCallbackListener(self)
+        self.allTags.add(tag.GetFullname())
+        if not tag.IsSet():
+            self.waitTags.add(tag.GetFullname())
+
     def SetDoneTags(self):
         if self.done_indicator:
             self.done_indicator.Set()

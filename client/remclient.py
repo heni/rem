@@ -454,6 +454,9 @@ class JobPacketInfo(object):
 
         return sum(get_res_working_time(res) for res in itertools.chain(*(job.results for job in self.jobs)))
 
+    def AddTag(self, tagname):
+        self.proxy.add_wait_tag(self.pck_id, tagname)
+        
 
 class JobInfo(object):
     """объект, инкапсулирующий информацию о задаче REM"""
