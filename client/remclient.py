@@ -90,6 +90,7 @@ import xmlrpclib
 import time
 import os
 import re
+import sre_parse
 import hashlib
 import getpass
 import types
@@ -100,6 +101,16 @@ from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POL
 
 __all__ = ["AdminConnector", "Connector"]
 MAX_PRIORITY = 2**31 - 1
+
+
+def _get_prefix(regexp):
+    prefix_lenght = 0
+    regexp_lenght = len(regexp)
+    while prefix_lenght < regexp_lenght:
+        if regexp[prefix_lenght] in sre_parse.SPECIAL_CHARS:
+            break
+        prefix_lenght += 1
+    return regexp[:prefix_lenght] or None
 
 
 class DuplicatePackageNameException(Exception):
@@ -580,6 +591,8 @@ class Connector(object):
             tags     - список тэгов
             schedule - список отложенных по времени заданий"""
         fn = getattr(self.proxy, "list_" + objtype, None)
+        if prefix is None and name_regex:
+            prefix = _get_prefix(name_regex)
         return fn(name_regex, prefix, memory_only)
 
     def PacketInfo(self, packet):
