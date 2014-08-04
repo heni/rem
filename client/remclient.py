@@ -217,7 +217,7 @@ class JobPacket(object):
         self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, packet_name_policy)
 
     def AddJob(self, shell, parents=None, pipe_parents=None, set_tag=None, tries=DEFAULT_TRIES_COUNT, files=None, \
-               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=NOTIFICATION_TIMEOUT, max_working_time=KILL_JOB_DEFAULT_TIMEOUT):
+               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=NOTIFICATION_TIMEOUT, max_working_time=KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
         """добавляет задачу в пакет
         shell - коммандная строка, которую следует выполнить
         tries - количество попыток выполнения команды (в случае неуспеха команда перазапускается ограниченное число раз) (по умолчанию: 5)
@@ -235,7 +235,7 @@ class JobPacket(object):
             self.AddFiles(files)
         return JobInfo(id=self.proxy.pck_add_job(self.id, shell, parents,
                        pipe_parents, set_tag, tries, max_err_len, retry_delay,
-                       pipe_fail, description, notify_timeout, max_working_time))
+                       pipe_fail, description, notify_timeout, max_working_time, output_to_status))
 
     def AddJobsBulk(self, *jobs):
         """быстрое(batch) добавление задач в пакет
@@ -251,7 +251,12 @@ class JobPacket(object):
                                   job.get("set_tag", None),
                                   job.get("tries", self.DEFAULT_TRIES_COUNT),
                                   job.get("max_err_len", None),
-                                  job.get("retry_delay", None))
+                                  job.get("retry_delay", None),
+                                  job.get("pipe_fail", None),
+                                  job.get("description", ""),
+                                  job.get("notify_timeout", NOTIFICATION_TIMEOUT),
+                                  job.get("max_working_time", KILL_JOB_DEFAULT_TIMEOUT),
+                                  job.get("output_to_status", False))
         return multicall()
 
     def AddFiles(self, files, retries=1):

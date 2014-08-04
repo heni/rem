@@ -91,12 +91,13 @@ class Job(Unpickable(err=nullobject,
                      max_working_time=(int, constants.KILL_JOB_DEFAULT_TIMEOUT),
                      notify_timeout=(int, constants.NOTIFICATION_TIMEOUT),
                      working_time=int,
-                     _notified=bool),
+                     _notified=bool,
+                     output_to_status=bool),
           CallbackHolder):
     ERR_PENALTY_FACTOR = 6
 
     def __init__(self, shell, parents, pipe_parents, packetRef, maxTryCount, limitter, max_err_len=None,
-                 retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT):
+                 retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
         super(Job, self).__init__()
         self.maxTryCount = maxTryCount
         self.limitter = limitter
@@ -114,6 +115,7 @@ class Job(Unpickable(err=nullobject,
             self.AddCallbackListener(self.limitter)
         self.packetRef = packetRef
         self.AddCallbackListener(self.packetRef)
+        self.output_to_status = output_to_status
 
     @staticmethod
     def __read_stream(fh, buffer):
@@ -241,6 +243,16 @@ class Job(Unpickable(err=nullobject,
             lambda: self.errPipe[0] if self.errPipe else None,
             lambda: self.errPipe[1] if self.errPipe else None
         )
+        logging.debug('type of output: %s', type(self.output))
+        if self.output_to_status:
+            if not self.output.closed:
+                self.output.close()
+            if self.output.closed:
+                self.output = open(self.output.name, 'r')
+            self.results[-1].message += '\nOutput:\n'
+            self.results[-1].message += '-'*80
+            self.results[-1].message += '\n'+'\n'.join(self.output.readlines())
+
         for fn in closingStreamGenerators:
             stream = fn()
             if stream is not None:
