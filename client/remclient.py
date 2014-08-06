@@ -465,6 +465,8 @@ class JobInfo(object):
 
     def __init__(self, **kws):
         self.__dict__.update(kws)
+        for res in getattr(self, 'results', ()):
+            res.data = "\n".join([x for x in res.data.splitlines() if x.strip()])
 
 
 class Tag(object):
