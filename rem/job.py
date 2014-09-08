@@ -249,9 +249,11 @@ class Job(Unpickable(err=nullobject,
                 self.output.close()
             if self.output.closed:
                 self.output = open(self.output.name, 'r')
-            self.results[-1].message += '\nOutput:\n'
-            self.results[-1].message += '-'*80
-            self.results[-1].message += '\n'+'\n'.join(self.output.readlines())
+            if len(self.results) :
+                self.results[-1].message = self.results[-1].message or ""
+                self.results[-1].message += '\nOutput:\n'
+                self.results[-1].message += '-'*80
+                self.results[-1].message += '\n'+'\n'.join(self.output.readlines())
 
         for fn in closingStreamGenerators:
             stream = fn()
