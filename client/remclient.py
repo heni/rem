@@ -562,6 +562,12 @@ class Connector(object):
         else:
             self.logger = logging.getLogger(logger_name)
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, eType, eVal, eTb):
+        self.proxy._ServerProxy__transport.close()
+
     def GetURL(self):
         return self.proxy._RetriableXMLRPCProxy__uri
 

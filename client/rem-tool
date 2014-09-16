@@ -37,7 +37,14 @@ class ICommander(object):
     def __init__(self, opt, args):
         self.type = args[0]
         self.options = opt
+
+    def __enter__(self):
         self.conn = remclient.Connector(self.options.url, conn_retries=2, verbose=True)
+        self.conn.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        return self.conn.__exit__(*args)
 
 
 def print_pck_info(pck, extended=False):
@@ -166,8 +173,8 @@ def main():
                      "status": StatusCommander, "update": UpdateCommander, "delete": LifeCommander,
                      "set": TagManipCommander,
                      "unset": TagManipCommander, "move": MoveCommander, "stop": LifeCommander}
-    commander = disp_commands[args[0]](opt, args)
-    commander()
+    with disp_commands[args[0]](opt, args) as commander:
+        commander()
 
 
 if __name__ == "__main__":
