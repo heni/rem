@@ -92,7 +92,9 @@ class Job(Unpickable(err=nullobject,
                      notify_timeout=(int, constants.NOTIFICATION_TIMEOUT),
                      working_time=int,
                      _notified=bool,
-                     output_to_status=bool),
+                     output_to_status=bool,
+                     alive=bool,
+                     running_pids=set),
           CallbackHolder):
     ERR_PENALTY_FACTOR = 6
 
@@ -177,10 +179,12 @@ class Job(Unpickable(err=nullobject,
             return self.limitter.CanStart()
         return True
 
-    def _finalize_job_iteration(self, pid, result):
+    def _finalize_job_iteration(self, pid, result, pidTrackers):
         try:
-            if self.pids is not None and pid is not None and pid in self.pids:
-                self.pids.remove(pid)
+            self.alive = False
+            if pidTrackers and pid is not None:
+                for tracker in pidTrackers:
+                    tracker.discard(pid)
             if result is not None:
                 self.results.append(result)
             if (result is None) \
@@ -195,14 +199,13 @@ class Job(Unpickable(err=nullobject,
         except:
             logging.exception("some error during job finalization")
 
-    def Run(self, pids=None):
+    def Run(self, worker_trace_pids=None):
+        self.alive = True
         self.input = self.output = None
         self.errPipe = None
-        if pids is None:
-            pids = set()
-        self.pids = pids
         jobResult = None
         jobPid = None
+        pidTrackers = [self.running_pids] + ([] if worker_trace_pids is None else [worker_trace_pids])
         try:
             self.tries += 1
             self.working_time = 0
@@ -216,9 +219,12 @@ class Job(Unpickable(err=nullobject,
                                        stderr=self.errPipe[1].fileno(), close_fds=True, cwd=self.packetRef.directory,
                                        preexec_fn=os.setpgrp)
             jobPid = process.pid
+            #in case when we stopped during start implicitly kill himself
             if jobPid is not None:
-                self.pids.add(jobPid)
+                for tracker in pidTrackers: tracker.add(jobPid)
             self.errPipe[1].close()
+            if not self.alive:
+                self.Terminate()
             _, err = self.__wait_process(process, self.errPipe[0])
             retCode = process.poll()
             if retCode is None:
@@ -232,7 +238,7 @@ class Job(Unpickable(err=nullobject,
             logging.exception("Run job %s exception: %s", self.id, e)
 
         finally:
-            self._finalize_job_iteration(jobPid, jobResult)
+            self._finalize_job_iteration(jobPid, jobResult, pidTrackers)
             self.CloseStreams()
             self.FireEvent("done")
 
@@ -270,8 +276,10 @@ class Job(Unpickable(err=nullobject,
                     logging.exception('close stream error')
 
     def Terminate(self):
-        pids = getattr(self, "pids", None)
+        self.alive = False
+        pids = self.running_pids
         if pids:
+            logging.debug("trying to terminate processes with pids: %s", ",".join(map(str, pids)))
             for pid in list(pids):
                 osspec.terminate(pid)
 

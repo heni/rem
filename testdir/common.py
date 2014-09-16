@@ -6,7 +6,7 @@ import remclient
 
 __all__ = ["PrintPacketResults", "TestingQueue", "LmtTestQueue", "Config",
            "WaitForExecution", "WaitForExecutionList", "PrintCurrentWorkingJobs",
-           "ServiceTemporaryShutdown"]
+           "ServiceTemporaryShutdown", "RestartService"]
 
 
 class SharedValue(object):
@@ -70,3 +70,8 @@ class ServiceTemporaryShutdown(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         subprocess.check_call([self.cmd, "start"])
+
+
+def RestartService(path_to_daemon="./"):
+    cmd = os.path.join(path_to_daemon, "start-stop-daemon.py")
+    subprocess.check_call([cmd, "restart"])

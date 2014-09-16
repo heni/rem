@@ -11,7 +11,6 @@ class T10(unittest.TestCase):
     """Check remote tags"""
 
     def setUp(self):
-        Config.Get().setUp()
         self.connector1 = Config.Get().server1.connector
         self.connector2 = Config.Get().server2.connector
         self.admin_connector = Config.Get().server1.admin_connector
@@ -106,7 +105,7 @@ class T10(unittest.TestCase):
         # self.assertEqual(self.admin_connector.UnregisterShare(tag1, "servername2"), True)
         # self.assertEqual(self.admin_connector.UnregisterShare(tag1, "servername2"), False)
         # self.admin_connector.RegisterShare(tag1, "servername2")
-        subprocess.check_call(["./start-stop-daemon.py", "restart"])
+        RestartService(self.srvdir1)
 
         pck = self.connector1.Packet("pck-%.0f" % time.time(), set_tag=tag1)
         self.connector1.Queue(TestingQueue.Get()).AddPacket(pck)
@@ -121,9 +120,9 @@ class T10(unittest.TestCase):
         self.connector2.Queue(TestingQueue.Get()).AddPacket(pck2)
 
         time.sleep(2)
-        subprocess.check_call(["./start-stop-daemon.py", "restart"])
+        RestartService(self.srvdir1)
         # self.admin_connector.RegisterShare(tag2, "servername2")
-        subprocess.check_call(["./start-stop-daemon.py", "restart"])
+        RestartService(self.srvdir1)
 
         pckInfo1 = self.connector2.PacketInfo(pck1.id)
         pckInfo2 = self.connector2.PacketInfo(pck2.id)
@@ -134,7 +133,7 @@ class T10(unittest.TestCase):
         remote_tag = self.servername1 + ":" + tag
         self.connector1.Tag(tag).Set()
         self.connector1.Tag(tag).Unset()
-        subprocess.check_call(["./start-stop-daemon.py", "restart"])
+        RestartService(self.srvdir1)
         pck = self.connector2.Packet("restoring-pck-%.0f" % time.time(), wait_tags=[remote_tag])
         self.connector2.Queue(TestingQueue.Get()).AddPacket(pck)
         time.sleep(3)
