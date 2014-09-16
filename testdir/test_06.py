@@ -12,8 +12,7 @@ class T06(unittest.TestCase):
     """Checking REM restarts consistency"""
 
     def RestartService(self):
-        projectDir = Config.Get().server1.projectDir
-        subprocess.check_call([os.path.join(projectDir, 'start-stop-daemon.py'), "restart"])
+        RestartService(Config.Get().server1.projectDir)
 
     def setUp(self):
         self.connector = Config.Get().server1.connector

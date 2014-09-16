@@ -54,8 +54,8 @@ class Configuration(object):
     @classmethod
     def GetLocalConfig(cls):
         config = cls()
-        config.server1 = ClientInfo("local-01", "local://.", "localhost")
-        config.server2 = ClientInfo("local-02", "local://../rem2/", "localhost")
+        config.server1 = ClientInfo("local-01", "local://./local-01/", "localhost")
+        config.server2 = ClientInfo("local-02", "local://./local-02/", "localhost")
         config.notify_email = "eugene.krokhalev@gmail.com"
         return config
 
@@ -64,13 +64,15 @@ class Configuration(object):
         for p in paths:
             srcp, dstp = os.path.join(srcdir, p), os.path.join(dstdir, p)
             try:
-                if os.path.isdir(dstp):
+                if os.path.isdir(dstp) and not os.path.islink(dstp):
                     shutil.rmtree(dstp)
                 else:
                     os.unlink(dstp)
             except OSError:
                 logging.exception("rem servers synchronization")
-            if os.path.isfile(srcp):
+            if os.path.islink(srcp):
+                os.symlink(os.readlink(srcp), dstp)
+            elif os.path.isfile(srcp):
                 shutil.copy2(srcp, dstp)
             elif os.path.isdir(srcp):
                 shutil.copytree(srcp, dstp)
@@ -81,6 +83,7 @@ class Configuration(object):
         path1 = getattr(getattr(self, "server1", None), "path", None)
         path2 = getattr(getattr(self, "server2", None), "path", None)
         if path1 and path2:
+            testdir.common.RestartService(path1)
             with testdir.common.ServiceTemporaryShutdown(path2):
                 self.__sync_dir(path1, path2, ["client", "rem", "rem-server.py", "start-stop-daemon.py", "setup_env.sh",
                                                "network_topology.cfg"])

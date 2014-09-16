@@ -204,8 +204,12 @@ class REMService(Service):
         self.Configure()
         runArgs = ["python", "rem-server.py", "start"]
         if self.setupScript: runArgs = ["/bin/sh", "-c", " ".join([self.setupScript, "&&", "exec"] + runArgs)]
-        super(REMService, self).__init__(runargs=runArgs, pidfile="var/rem.pid", logfile="var/rem.errlog", name="remd",
-                                         checkname="python")
+        if not os.path.isdir("var"): os.makedirs("var")
+        super(REMService, self).__init__(
+            runargs=runArgs, pidfile="var/rem.pid", logfile="var/rem.errlog", 
+            name="remd(\"%s\")" % self.serverName,
+            checkname="python"
+        )
 
     def Configure(self):
         import ConfigParser
@@ -215,6 +219,7 @@ class REMService(Service):
         if configFile not in configParser.read(configFile):
             raise EnvironmentError("some errors in configuration file \"%s\"" % configFile)
         self.serverURL = "http://localhost:%d/" % configParser.getint("server", "port")
+        self.serverName = configParser.get("server", "network_hostname")
         self.setupScript = ". %s" % configParser.get("run", "setup_script") if configParser.has_option("run",
                                                                                                        "setup_script") else ""
 

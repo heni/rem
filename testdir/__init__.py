@@ -26,3 +26,4 @@ def setUp(config, queueName="test"):
     LmtTestQueue.value = queueName + "-lmt"
     logging.basicConfig(level=logging.DEBUG,
                         format="\x1b[1m<%(levelname)s:%(module)s:%(funcName)s %(asctime)s>\x1b[m %(message)s")
+    config.setUp()
