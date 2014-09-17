@@ -3,9 +3,9 @@ import itertools
 import time
 import logging
 
-from common import *
-from callbacks import *
-from packet import *
+from common import emptyset, TimedSet, PackSet, PickableRLock, Unpickable
+from callbacks import CallbackHolder, ICallbackAcceptor
+from packet import JobPacket, PacketCustomLogic, PacketState
 
 
 class Queue(Unpickable(pending=PackSet.create,
@@ -118,13 +118,16 @@ class Queue(Unpickable(pending=PackSet.create,
         pck.Init(context)
         pck.Resume()
 
+    def ScheduleNonitializedRestoring(self, context):
+        with self.lock:
+            while len(self.noninitialized) != 0:
+                pck = self.noninitialized.pop()
+                context.Scheduler.ScheduleTask(0, self.RestoreNoninitialized, pck, context)
+
     def Get(self, context):
         DELAY = 5
-        if len(self.noninitialized) != 0:
-            with self.lock:
-                while len(self.noninitialized) != 0:
-                    pck = self.noninitialized.pop()
-                    context.Scheduler.ScheduleTask(0, self.RestoreNoninitialized, pck, context)
+        if self.noninitialized:
+            self.ScheduleNonitializedRestoring(context)
         pckIncorrect = None
         while True:
             if not self.HasStartableJobs():
