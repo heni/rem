@@ -76,13 +76,10 @@ KILL_TICK = 0.001
 
 def terminate(pid):
     try:
-        '''old kill procedure
         os.kill(pid, signal.SIGTERM)
         time.sleep(KILL_TICK)
         if is_pid_alive(pid):
             os.killpg(pid, signal.SIGKILL)
-        '''
-        os.killpg(pid, signal.SIGKILL)
     except OSError:
         pass
 

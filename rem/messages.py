@@ -14,6 +14,8 @@ def GetHelper(helper_cls, *args):
 
 def GetHelperByPacketState(pck, ctx):
     if ctx and ctx.send_emails:
+        if not ctx.send_emergency_emails and pck.CheckFlag(PacketFlag.RCVR_ERROR):
+            return None
         helper_cls = {PacketState.ERROR: PACKET_ERROR}#, PacketState.SUCCESSFULL: PACKET_SUCCESS}
         return GetHelper(helper_cls.get(pck.state, None), pck, ctx)
 
