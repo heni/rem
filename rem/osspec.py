@@ -80,7 +80,6 @@ def terminate(pid):
         time.sleep(KILL_TICK)
         if is_pid_alive(pid):
             os.killpg(pid, signal.SIGKILL)
-
     except OSError:
         pass
 
