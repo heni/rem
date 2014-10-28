@@ -19,7 +19,7 @@ def GetHelperByPacketState(pck, ctx):
 
 
 def GetEmergencyHelper(pck, ctx):
-    if ctx and ctx.send_emails:
+    if ctx and ctx.send_emails and ctx.send_emergency_emails:
         return EmergencyError(pck, ctx)
 
 
