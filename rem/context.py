@@ -85,6 +85,7 @@ class Context(object):
         self.network_topology = config.safe_get("server", "network_topology")
         self.network_name = config.safe_get("server", "network_hostname")
         self.send_emails = config.getboolean("server", "send_emails")
+        self.send_emergency_emails = config.safe_getboolean("server", "send_emergency_emails")
         self.execMode = execMode
         self.useMemProfiler = config.getboolean("server", "use_memory_profiler")
         self.max_remotetags_resend_delay = config.safe_getint("server", "max_remotetags_resend_delay", 300)

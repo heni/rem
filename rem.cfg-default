@@ -60,6 +60,7 @@ network_topology = svn+ssh://${svnpath}/network_topology.cfg
 network_hostname = ${hostname}
 #посылать ли письма по завершению работы пакетов
 send_emails = yes
+send_emergency_emails = no
 #собирать профилировщиком статистику по использованию памяти (использовать только в отладочных целяx)
 use_memory_profiler = no
 #максимальный интервал между попытками отправки извещений другим REM-ам

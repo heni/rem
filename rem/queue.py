@@ -179,7 +179,14 @@ class Queue(Unpickable(pending=PackSet.create,
     def Resume(self, resumeWorkable=False):
         self.isSuspended = False
         for pck in list(self.suspended):
-            pck.Resume(resumeWorkable)
+            try:
+                pck.Resume(resumeWorkable)
+            except:
+                logging.error("can't resume packet %s", pck.id)
+                try:
+                    pck.changeState(PacketState.ERROR)
+                except:
+                    logging.error("can't mark packet %s as errored")
 
     def Suspend(self):
         self.isSuspended = True
