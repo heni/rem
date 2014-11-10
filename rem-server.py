@@ -328,6 +328,11 @@ def queue_set_success_lifetime(queue_name, lifetime):
     q.SetSuccessLifeTime(lifetime)
 
 
+@traced_rpc_method()
+def queue_set_errored_lifetime(queue_name, lifetime):
+    q = _scheduler.Queue(queue_name, create=False)
+    q.SetErroredLifeTime(lifetime)
+
 
 class RemServer(object):
     def __init__(self, port, poolsize, scheduler, readonly=False):
@@ -383,6 +388,7 @@ class RemServer(object):
         self.register_function(pck_list_files, "pck_list_files")
         self.register_function(pck_get_file, "pck_get_file")
         self.register_function(queue_set_success_lifetime, "queue_set_success_lifetime")
+        self.register_function(queue_set_errored_lifetime, "queue_set_errored_lifetime")
 
     def request_processor(self):
         rpc_fd = self.rpcserver.fileno()

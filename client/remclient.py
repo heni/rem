@@ -207,6 +207,9 @@ class Queue(object):
         self.proxy.queue_set_success_lifetime(self.name, lifetime)
 
 
+    def SetErroredLifeTime(self, lifetime):
+        self.proxy.queue_set_errored_lifetime(self.name, lifetime)
+
 
 class JobPacket(object):
     """прокси объект для создания пакетов задач REM"""
