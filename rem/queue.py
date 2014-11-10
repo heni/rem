@@ -33,8 +33,8 @@ class Queue(Unpickable(pending=PackSet.create,
         self.name = name
 
     def __getstate__(self):
-        if self.succes_lifetime >= 0:
-            self.forgetOldItems(self.worked, self.succes_lifetime)
+        if self.success_lifetime >= 0:
+            self.forgetOldItems(self.worked, self.success_lifetime)
         else:
             self.forgetOldItems(self.worked, self.successForgetTm)
         self.forgetOldItems(self.errored, self.errorForgetTm)
@@ -45,7 +45,7 @@ class Queue(Unpickable(pending=PackSet.create,
         return sdict
 
     def SetSuccessLifeTime(self, lifetime):
-        self.succes_lifetime = lifetime
+        self.success_lifetime = lifetime
 
     def OnJobGet(self, ref):
         #lock has been already gotten in Queue.Get
@@ -66,7 +66,6 @@ class Queue(Unpickable(pending=PackSet.create,
         self.errorForgetTm = context.error_lifetime
 
     def forgetOldItems(self, queue, expectedLifetime):
-        logging.debug('queue %s: forgetting with lifetime %d, success_lifetime = %d' % (self.name, expectedLifetime, self.succes_lifetime))
         barrierTm = time.time() - expectedLifetime
         while len(queue) > 0:
             job, tm = queue.peak()
