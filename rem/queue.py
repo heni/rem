@@ -19,7 +19,8 @@ class Queue(Unpickable(pending=PackSet.create,
                        lock=PickableRLock.create,
                        errorForgetTm=int,
                        successForgetTm=int,
-                       workingLimit=(int, 1)),
+                       workingLimit=(int, 1),
+                       success_lifetime=(int, -1)),
             CallbackHolder,
             ICallbackAcceptor):
     VIEW_BY_ORDER = "pending", "waited", "errored", "suspended", "worked", "noninitialized"
@@ -32,13 +33,19 @@ class Queue(Unpickable(pending=PackSet.create,
         self.name = name
 
     def __getstate__(self):
-        self.forgetOldItems(self.worked, self.successForgetTm)
+        if self.succes_lifetime >= 0:
+            self.forgetOldItems(self.worked, self.succes_lifetime)
+        else:
+            self.forgetOldItems(self.worked, self.successForgetTm)
         self.forgetOldItems(self.errored, self.errorForgetTm)
         sdict = getattr(super(Queue, self), "__getstate__", lambda: self.__dict__)()
         with self.lock:
             for q in self.VIEW_BY_ORDER:
                 sdict[q] = sdict[q].copy()
         return sdict
+
+    def SetSuccessLifeTime(self, lifetime):
+        self.succes_lifetime = lifetime
 
     def OnJobGet(self, ref):
         #lock has been already gotten in Queue.Get
@@ -59,6 +66,7 @@ class Queue(Unpickable(pending=PackSet.create,
         self.errorForgetTm = context.error_lifetime
 
     def forgetOldItems(self, queue, expectedLifetime):
+        logging.debug('queue %s: forgetting with lifetime %d, success_lifetime = %d' % (self.name, expectedLifetime, self.succes_lifetime))
         barrierTm = time.time() - expectedLifetime
         while len(queue) > 0:
             job, tm = queue.peak()

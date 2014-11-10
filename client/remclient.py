@@ -203,6 +203,10 @@ class Queue(object):
         plist = self.proxy.queue_list_updated(self.name, last_modified, filter)
         return [JobPacketInfo(self.conn, pck_id) for pck_id in plist]
 
+    def SetSuccessLifeTime(self, lifetime):
+        self.proxy.queue_set_success_lifetime(self.name, lifetime)
+
+
 
 class JobPacket(object):
     """прокси объект для создания пакетов задач REM"""
