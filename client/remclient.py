@@ -204,11 +204,16 @@ class Queue(object):
         return [JobPacketInfo(self.conn, pck_id) for pck_id in plist]
 
     def SetSuccessLifeTime(self, lifetime):
-        self.proxy.queue_set_success_lifetime(self.name, lifetime)
-
+        if isinstance(lifetime, datetime.timedelta):
+            self.proxy.queue_set_success_lifetime(self.name, lifetime.total_seconds())
+        else:
+            self.proxy.queue_set_success_lifetime(self.name, lifetime)
 
     def SetErroredLifeTime(self, lifetime):
-        self.proxy.queue_set_errored_lifetime(self.name, lifetime)
+        if isinstance(lifetime, datetime.timedelta):
+            self.proxy.queue_set_errored_lifetime(self.name, lifetime.total_seconds())
+        else:
+            self.proxy.queue_set_errored_lifetime(self.name, lifetime)
 
 
 class JobPacket(object):
