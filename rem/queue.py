@@ -20,8 +20,8 @@ class Queue(Unpickable(pending=PackSet.create,
                        errorForgetTm=int,
                        successForgetTm=int,
                        workingLimit=(int, 1),
-                       success_lifetime=(int, -1),
-                       errored_lifetime=(int, -1)),
+                       success_lifetime=(int, 0),
+                       errored_lifetime=(int, 0)),
             CallbackHolder,
             ICallbackAcceptor):
     VIEW_BY_ORDER = "pending", "waited", "errored", "suspended", "worked", "noninitialized"
@@ -33,22 +33,9 @@ class Queue(Unpickable(pending=PackSet.create,
         super(Queue, self).__init__()
         self.name = name
 
-    def ForgetSuccessPackets(self):
-        if self.success_lifetime >= 0:
-            self.forgetOldItems(self.worked, self.success_lifetime)
-        else:
-            self.forgetOldItems(self.worked, self.successForgetTm)
-
-    def ForgetErroredPackets(self):
-        if self.errored_lifetime >= 0:
-            self.forgetOldItems(self.errored, self.errored_lifetime)
-        else:
-            self.forgetOldItems(self.errored, self.errorForgetTm)
-
-
     def __getstate__(self):
-        self.ForgetSuccessPackets()
-        self.ForgetErroredPackets()
+        self.forgetOldItems(self.worked, self.success_lifetime or self.successForgetTm)
+        self.forgetOldItems(self.errored, self.errored_lifetime or self.errorForgetTm)
         sdict = getattr(super(Queue, self), "__getstate__", lambda: self.__dict__)()
         with self.lock:
             for q in self.VIEW_BY_ORDER:
