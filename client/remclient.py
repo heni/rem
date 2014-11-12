@@ -97,6 +97,7 @@ import types
 import socket
 import sys
 import itertools
+import datetime
 from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY, DENY_DUPLICATE_NAMES_POLICY, KILL_JOB_DEFAULT_TIMEOUT, NOTIFICATION_TIMEOUT, WARN_DUPLICATE_NAMES_POLICY
 
 __all__ = ["AdminConnector", "Connector"]
@@ -202,6 +203,22 @@ class Queue(object):
             assert filter in ("errored", "suspended", "worked", "waiting", "pending", "working", "all")
         plist = self.proxy.queue_list_updated(self.name, last_modified, filter)
         return [JobPacketInfo(self.conn, pck_id) for pck_id in plist]
+
+    def SetSuccessLifeTime(self, lifetime):
+        seconds = lifetime
+        if isinstance(lifetime, datetime.timedelta):
+            seconds = lifetime.total_seconds()
+        if seconds == 0:
+            raise RuntimeError("Lifetime must be greater than 0")
+        self.proxy.queue_set_success_lifetime(self.name, seconds)
+
+    def SetErroredLifeTime(self, lifetime):
+        seconds = lifetime
+        if isinstance(lifetime, datetime.timedelta):
+            seconds = lifetime.total_seconds()
+        if seconds == 0:
+            raise RuntimeError("Lifetime must be greater than 0")
+        self.proxy.queue_set_error_lifetime(self.name, seconds)
 
 
 class JobPacket(object):

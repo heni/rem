@@ -19,7 +19,9 @@ class Queue(Unpickable(pending=PackSet.create,
                        lock=PickableRLock.create,
                        errorForgetTm=int,
                        successForgetTm=int,
-                       workingLimit=(int, 1)),
+                       workingLimit=(int, 1),
+                       success_lifetime=(int, 0),
+                       errored_lifetime=(int, 0)),
             CallbackHolder,
             ICallbackAcceptor):
     VIEW_BY_ORDER = "pending", "waited", "errored", "suspended", "worked", "noninitialized"
@@ -32,13 +34,19 @@ class Queue(Unpickable(pending=PackSet.create,
         self.name = name
 
     def __getstate__(self):
-        self.forgetOldItems(self.worked, self.successForgetTm)
-        self.forgetOldItems(self.errored, self.errorForgetTm)
+        self.forgetOldItems(self.worked, self.success_lifetime or self.successForgetTm)
+        self.forgetOldItems(self.errored, self.errored_lifetime or self.errorForgetTm)
         sdict = getattr(super(Queue, self), "__getstate__", lambda: self.__dict__)()
         with self.lock:
             for q in self.VIEW_BY_ORDER:
                 sdict[q] = sdict[q].copy()
         return sdict
+
+    def SetSuccessLifeTime(self, lifetime):
+        self.success_lifetime = lifetime
+
+    def SetErroredLifeTime(self, lifetime):
+        self.errored_lifetime = lifetime
 
     def OnJobGet(self, ref):
         #lock has been already gotten in Queue.Get
@@ -194,7 +202,7 @@ class Queue(Unpickable(pending=PackSet.create,
     def Status(self):
         return {"alive": self.IsAlive(), "pending": len(self.pending), "suspended": len(self.suspended),
                 "errored": len(self.errored), "worked": len(self.worked),
-                "waiting": len(self.waited), "working": len(self.working), "working-limit": self.workingLimit}
+                "waiting": len(self.waited), "working": len(self.working), "working-limit": self.workingLimit, "successful lifetime": self.success_lifetime if self.success_lifetime >= 0 else self.successForgetTm, "errored lifetime": self.errored_lifetime if self.errored_lifetime >= 0 else self.errorForgetTm}
 
     def ChangeWorkingLimit(self, lmtValue):
         self.workingLimit = int(lmtValue)
