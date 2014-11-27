@@ -5,7 +5,7 @@ from testdir import *
 
 
 class T16(unittest.TestCase):
-    """Statistics functionality"""
+    """Test for queue/level lifetimes functionality"""
 
     def setUp(self):
         self.connector = Config.Get().server1.connector

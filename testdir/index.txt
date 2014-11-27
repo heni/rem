@@ -13,4 +13,4 @@ test_12.py - speed tests
 test_13.py - test for max working time (TODO: move to test_02.py)
 test_14.py - test for names collisions detection
 test_15.py - test for waiting tags in packet statistics (TODO: move to test_01.py or test_02.py)
-test_16.py - test for lifetimes statistics (TODO: move to test_01.py)
+test_16.py - test for queue-level lifetimes (TODO: move to test_02.py)
