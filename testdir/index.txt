@@ -1,0 +1,16 @@
+test_01.py - test common statistics about REM server
+test_02.py - test basic functionality
+test_03.py - test interactions with ENVIRONMENT variables
+test_04.py - test interesting edge conditions
+test_05.py - test various reported problems
+test_06.py - test restart consistency
+test_07.py - test REM internal structures
+test_08.py - test tags restarting functionality
+test_09.py - tests agains known possible race conditions and deadlocks
+test_10.py - test remote tags functionality
+test_11.py - test readonly XMPRPC API
+test_12.py - speed tests
+test_13.py - test for max working time (TODO: move to test_02.py)
+test_14.py - test for names collisions detection
+test_15.py - test for waiting tags in packet statistics (TODO: move to test_01.py or test_02.py)
+test_16.py - test for lifetimes statistics (TODO: move to test_01.py)
