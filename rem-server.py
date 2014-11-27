@@ -322,6 +322,7 @@ def pck_get_file(pck_id, filename):
         return xmlrpclib.Binary(file)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
+
 @traced_rpc_method()
 def queue_set_success_lifetime(queue_name, lifetime):
     q = _scheduler.Queue(queue_name, create=False)
@@ -332,6 +333,14 @@ def queue_set_success_lifetime(queue_name, lifetime):
 def queue_set_error_lifetime(queue_name, lifetime):
     q = _scheduler.Queue(queue_name, create=False)
     q.SetErroredLifeTime(lifetime)
+
+
+@traced_rpc_method("warning")
+def set_backupable_state(bckpFlag):
+    if bckpFlag:
+        _scheduler.ResumeBackups()
+    else:
+        _scheduler.SuspendBackups()
 
 
 class RemServer(object):
@@ -389,6 +398,7 @@ class RemServer(object):
         self.register_function(pck_get_file, "pck_get_file")
         self.register_function(queue_set_success_lifetime, "queue_set_success_lifetime")
         self.register_function(queue_set_error_lifetime, "queue_set_error_lifetime")
+        self.register_function(set_backupable_state, "set_backupable_state")
 
     def request_processor(self):
         rpc_fd = self.rpcserver.fileno()

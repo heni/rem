@@ -66,6 +66,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                            qRef=dict, #inversed qList for searching queues by name
                            tagRef=TagStorage, #inversed taglist for searhing tags by name
                            alive=(bool, False),
+                           backupable=(bool, True),
                            binStorage=BinaryStorage.create,
                            #storage with knowledge about saved binary objects (files for packets)
                            packStorage=GlobalPacketStorage, #storage of all known packets
@@ -161,6 +162,9 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 os.makedirs(self.backupDirectory)
             start_time = time.time()
             self.tagRef.tag_logger.Rotate()
+            if not self.backupable:
+                logging.warning("REM is currently not in backupable state; change it back to backupable as soon as possible")
+                return
             self.SaveData(os.path.join(self.backupDirectory, "sched-%.0f.dump" % time.time()))
             backupFiles = sorted(filter(self.CheckBackupFilename, os.listdir(self.backupDirectory)), reverse=True)
             unsuccessfulBackupFiles = filter(self.CheckUnsuccessfulBackupFilename, os.listdir(self.backupDirectory))
@@ -169,6 +173,12 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.tagRef.tag_logger.Clear(start_time)
         finally:
             pass
+
+    def SuspendBackups(self):
+        self.backupable = False
+
+    def ResumeBackups(self):
+        self.backupable = True
 
     def SaveData(self, filename):
         gc.collect()
