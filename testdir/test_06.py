@@ -1,11 +1,9 @@
 import unittest
 import logging
 import time
-import os
-import subprocess
+import xmlrpclib
 
-import remclient
-from testdir import *
+from testdir import Config, RestartService, TestingQueue, WaitForExecution, WaitForExecutionList
 
 
 class T06(unittest.TestCase):
@@ -44,4 +42,21 @@ class T06(unittest.TestCase):
             pck.Delete()
 
         self.assertTrue(self.connector.Tag(tag0name).Check())
-        self.assertTrue(self.connector.Tag(tag1name).Check())            
+        self.assertTrue(self.connector.Tag(tag1name).Check())
+
+    def testTagsJournal(self):
+        tagname = pckname = "lostpacket-%d" % self.timestamp
+
+        self.connector.proxy.set_backupable_state(False)
+        self.assertFalse(self.connector.Tag(tagname).Check())
+        pck = self.connector.Packet(pckname, self.timestamp, set_tag=tagname)
+        pck.AddJob("true")
+        self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
+        WaitForExecution(self.connector.PacketInfo(pck.id))
+        self.assertEqual("SUCCESSFULL", self.connector.PacketInfo(pck.id).state)
+        self.assertTrue(self.connector.Tag(tagname).Check())
+
+        self.RestartService()
+        self.assertTrue(self.connector.Tag(tagname).Check())
+        self.assertRaises(xmlrpclib.Fault, lambda: self.connector.PacketInfo(pck.id).state)
+
