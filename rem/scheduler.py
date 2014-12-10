@@ -224,7 +224,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         gc.collect()
         sdict = {"qList": copy.copy(self.qList),
                  "qRef": copy.copy(self.qRef),
-                 "q": self.tagRef,
+                 "tagRef": self.tagRef,
                  "binStorage": self.binStorage,
                  "tempStorage": self.tempStorage,
                  "schedWatcher": self.schedWatcher,
