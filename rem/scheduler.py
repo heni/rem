@@ -41,6 +41,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
                 else:
                     break
             if runner:
+                logging.debug("SchedWatcher notify scheduler")
                 self.workingQueue.put(runner)
                 self.scheduler.notify(self)
 
@@ -55,6 +56,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
             self.tasks.put((FuncRunner(fn, args, kws), runtm + time.time()))
 
     def GetTask(self):
+        logging.debug("Requested watcher`s task")
         return self.workingQueue.get()
 
     def HasStartableJobs(self):
@@ -158,7 +160,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def Get(self):
         with self.lock:
             while self.alive and not self.qList and self.schedWatcher.Empty():
-                self.cond.wait()
+                logging.debug("Scheduler waiting for condition")
+                self.HasScheduledTask.wait()
 
             if not self.schedWatcher.Empty():
                 schedRunner = self.schedWatcher.GetTask()
@@ -185,9 +188,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                     if not self.in_deque.get(queue.name, False):
                         self.qList.append(queue.name)
                         self.in_deque[queue.name] = True
-                        self.HasScheduledTask.notify()
-        if isinstance(ref, SchedWatcher):
-            self.HasScheduledTask.notify()
+        logging.debug("Scheduler notified")
+        self.HasScheduledTask.notify()
 
 
     def CheckBackupFilename(self, filename):
@@ -335,6 +337,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         return self.connManager
 
     def OnTaskPending(self, ref):
+        logging.debug("Some task pending")
         self.Notify(ref)
 
 
