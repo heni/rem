@@ -52,7 +52,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
         if not skipLoggingFlag:
             logging.debug("new task %r scheduled on %s", fn, time.ctime(time.time() + runtm))
         with self.lock:
-            self.tasks.add(FuncRunner(fn, args, kws), runtm + time.time())
+            self.tasks.put((FuncRunner(fn, args, kws), runtm + time.time()))
 
     def GetTask(self):
         return self.workingQueue.get()
@@ -165,7 +165,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 if schedRunner:
                     return FuncJob(schedRunner)
 
-            if self.IsAlive() and self.qList:
+            if self.alive and self.qList:
                 qname = self.qList.popleft()
                 self.in_deque[qname] = False
                 job = self.qRef[qname].Get(self.context)
