@@ -45,6 +45,14 @@ class ThreadJobWorker(KillableWorker):
         self.scheduler = scheduler
         self.suspended = False
 
+    def run(self):
+        while not self.IsKilled():
+            try:
+                self.do()
+            except Exception, e:
+                logging.exception("worker\tjob execution error %s", e)
+            #time.sleep(self.tickTime)
+
     def do(self):
         if not self.IsSuspended():
             try:

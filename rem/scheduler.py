@@ -82,7 +82,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
 class Scheduler(Unpickable(lock=PickableLock.create,
                            qList=deque, #list of all known queue
                            qRef=dict, #inversed qList for searching queues by name
-                           in_deq=dict,
+                           in_deque=dict,
                            tagRef=TagStorage, #inversed taglist for searhing tags by name
                            alive=(bool, False),
                            backupable=(bool, True),
@@ -184,7 +184,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             if not queue.HasStartableJobs():
                 return
             with self.lock:
-                if queue.HasTasks():
+                if queue.HasStartableJobs():
                     if not self.in_deque.get(queue.name, False):
                         self.qList.append(queue.name)
                         self.in_deque[queue.name] = True
