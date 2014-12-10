@@ -1,6 +1,7 @@
 from __future__ import with_statement
 import copy
 import shutil
+import threading
 import time
 import logging
 import os
@@ -8,6 +9,9 @@ import re
 from collections import deque
 from cPickle import Pickler, Unpickler
 import gc
+from threading import Condition
+from common import PickableStdQueue
+from common import PickableStdPriorityQueue
 
 from job import FuncJob, FuncRunner
 from common import Unpickable, TimedSet, PickableLock, FakeObjectRegistrator, ObjectRegistrator, nullobject
@@ -19,20 +23,26 @@ from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage
 from callbacks import ICallbackAcceptor
 
 
-class SchedWatcher(Unpickable(tasks=TimedSet.create,
+
+class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
                               lock=PickableLock.create,
-                              workingQueue=list
+                              workingQueue=PickableStdQueue
                             ),
                    ICallbackAcceptor):
     def OnTick(self, ref):
         tm = time.time()
-        while len(self.tasks) > 0:
-            runner, runtm = self.tasks.peak()
-            if runtm > tm: break
+        while not self.tasks.empty():
+            runner = None
             with self.lock:
-                if self.tasks.peak()[1] > tm: break
-                runner, runtm = self.tasks.pop()
-                self.workingQueue.append(runner)
+                if not self.tasks.empty():
+                    runner, runtm = self.tasks.get()
+                    if runtm > tm:
+                        break
+                else:
+                    break
+            if runner:
+                self.workingQueue.put(runner)
+                self.scheduler.notify(self)
 
     def AddTask(self, runtm, fn, *args, **kws):
         if "skip_logging" in kws:
@@ -45,14 +55,20 @@ class SchedWatcher(Unpickable(tasks=TimedSet.create,
             self.tasks.add(FuncRunner(fn, args, kws), runtm + time.time())
 
     def GetTask(self):
-        if self.workingQueue:
-            with self.lock:
-                if self.workingQueue:
-                    return self.workingQueue.pop(0)
+        return self.workingQueue.get()
+
+    def HasStartableJobs(self):
+        return not self.workingQueue.empty()
+
+    def Empty(self):
+        return not self.HasStartableJobs()
+
+    def UpdateContext(self, context):
+        self.scheduler = context.Scheduler
 
     def ListTasks(self):
         task_lst = [(str(o), tm) for o, tm in self.tasks.items()]
-        task_lst += [(str(o), None) for o, tm in self.workingQueue]
+        task_lst += [(str(o), None) for o, tm in self.workingQueue.queue]
         return task_lst
 
     def __getstate__(self):
@@ -64,6 +80,7 @@ class SchedWatcher(Unpickable(tasks=TimedSet.create,
 class Scheduler(Unpickable(lock=PickableLock.create,
                            qList=deque, #list of all known queue
                            qRef=dict, #inversed qList for searching queues by name
+                           in_deq=dict,
                            tagRef=TagStorage, #inversed taglist for searhing tags by name
                            alive=(bool, False),
                            binStorage=BinaryStorage.create,
@@ -85,6 +102,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.ObjectRegistratorClass = FakeObjectRegistrator if context.execMode == "start" else ObjectRegistrator
         if context.useMemProfiler:
             self.initProfiler()
+        self.HasScheduledTask = threading.Condition(self.lock)
 
     def UpdateContext(self, context=None):
         if context is not None:
@@ -92,6 +110,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.poolSize = context.thread_pool_size
             self.initBackupSystem(context)
             context.registerScheduler(self)
+        self.schedWatcher.UpdateContext(context)
         self.binStorage.UpdateContext(self.context)
         self.tagRef.UpdateContext(self.context)
         PacketCustomLogic.UpdateContext(self.context)
@@ -136,18 +155,39 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             return q
 
     def Get(self):
-        schedRunner = self.schedWatcher.GetTask()
-        if schedRunner:
-            return FuncJob(schedRunner)
-        for _ in xrange(len(self.qList)):
-            try:
-                q = self.qList[0]
-                if q and q.IsAlive():
-                    job = q.Get(self.context)
-                    if job:
-                        return job
-            finally:
-                self.qList.rotate(-1)
+        with self.lock:
+            while self.alive and not self.qList and self.schedWatcher.Empty():
+                self.cond.wait()
+
+            if not self.schedWatcher.Empty():
+                schedRunner = self.schedWatcher.GetTask()
+                if schedRunner:
+                    return FuncJob(schedRunner)
+
+            if self.IsAlive() and self.qList:
+                qname = self.qList.popleft()
+                self.in_deque[qname] = False
+                job = self.qRef[qname].Get(self.context)
+                if self.qRef[qname].HasStartableJobs():
+                    self.qList.append(qname)
+                    self.in_deque[qname] = True
+                    self.HasScheduledTask.notify()
+                return job
+
+    def Notify(self, ref):
+        if isinstance(ref, Queue):
+            queue = ref
+            if not queue.HasStartableJobs():
+                return
+            with self.lock:
+                if queue.HasTasks():
+                    if not self.in_deque.get(queue.name, False):
+                        self.qList.append(queue.name)
+                        self.in_deque[queue.name] = True
+                        self.HasScheduledTask.notify()
+        if isinstance(ref, SchedWatcher):
+            self.HasScheduledTask.notify()
+
 
     def CheckBackupFilename(self, filename):
         return bool(self.BackupFilenameMatchRe.match(filename))
@@ -174,7 +214,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         gc.collect()
         sdict = {"qList": copy.copy(self.qList),
                  "qRef": copy.copy(self.qRef),
-                 "tagRef": self.tagRef,
+                 "q": self.tagRef,
                  "binStorage": self.binStorage,
                  "tempStorage": self.tempStorage,
                  "schedWatcher": self.schedWatcher,
@@ -283,5 +323,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def GetConnectionManager(self):
         return self.connManager
+
+    def OnTaskPending(self, ref):
+        self.Notify(ref)
 
 

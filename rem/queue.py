@@ -95,6 +95,8 @@ class Queue(Unpickable(pending=PackSet.create,
                 with self.lock: src_queue.remove(pck)
             if dest_queue is not None:
                 with self.lock: dest_queue.add(pck)
+            if pck.state == PacketState.PENDING:
+                self.FireEvent("task_pending")
 
     def IsAlive(self):
         return not self.isSuspended
