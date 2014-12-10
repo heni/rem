@@ -204,7 +204,9 @@ class Queue(Unpickable(pending=PackSet.create,
     def Status(self):
         return {"alive": self.IsAlive(), "pending": len(self.pending), "suspended": len(self.suspended),
                 "errored": len(self.errored), "worked": len(self.worked),
-                "waiting": len(self.waited), "working": len(self.working), "working-limit": self.workingLimit, "successful lifetime": self.success_lifetime if self.success_lifetime >= 0 else self.successForgetTm, "errored lifetime": self.errored_lifetime if self.errored_lifetime >= 0 else self.errorForgetTm}
+                "waiting": len(self.waited), "working": len(self.working), "working-limit": self.workingLimit, 
+                "success-lifetime": self.success_lifetime if self.success_lifetime >= 0 else self.successForgetTm, 
+                "error-lifetime": self.errored_lifetime if self.errored_lifetime >= 0 else self.errorForgetTm}
 
     def ChangeWorkingLimit(self, lmtValue):
         self.workingLimit = int(lmtValue)

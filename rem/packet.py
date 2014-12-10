@@ -512,6 +512,13 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                       wait_time=wait_time,
                       last_modified=history[-1][1],
                       waiting_time=waiting_time)
+        extra_flags = set()
+        if self.state == PacketState.ERROR and self.CheckFlag(PacketFlag.RCVR_ERROR):
+            extra_flags.add("can't-be-recovered")
+        if self.CheckFlag(PacketFlag.USER_SUSPEND):
+            extra_flags.add("manually-suspended")
+        if extra_flags:
+            status["extra_flags"] = ";".join(extra_flags)
 
         if self.state in (PacketState.ERROR, PacketState.SUSPENDED,
                           PacketState.WORKABLE, PacketState.PENDING,
