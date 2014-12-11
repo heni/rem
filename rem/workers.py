@@ -54,7 +54,7 @@ class ThreadJobWorker(KillableWorker):
             #time.sleep(self.tickTime)
 
     def do(self):
-        if not self.IsSuspended():
+        if not self.IsSuspended() and self.scheduler.alive:
             try:
                 self.pids = set()
                 job = self.scheduler.Get()

@@ -24,9 +24,9 @@ from callbacks import ICallbackAcceptor
 
 
 
-class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
+class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
                               lock=PickableLock.create,
-                              workingQueue=PickableStdQueue
+                              workingQueue=PickableStdQueue.create
                             ),
                    ICallbackAcceptor):
     def OnTick(self, ref):
@@ -77,7 +77,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
 
     def __getstate__(self):
         sdict = self.__dict__.copy()
-        #sdict["tasks"] = sdict["tasks"].copy()
+        sdict["tasks"] = sdict["tasks"].__getstate__()
         return getattr(super(SchedWatcher, self), "__getstate__", lambda: sdict)()
 
 
@@ -107,7 +107,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.ObjectRegistratorClass = FakeObjectRegistrator if context.execMode == "start" else ObjectRegistrator
         if context.useMemProfiler:
             self.initProfiler()
-        self.HasScheduledTask = threading.Condition(self.lock)
 
     def UpdateContext(self, context=None):
         if context is not None:
@@ -115,11 +114,12 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.poolSize = context.thread_pool_size
             self.initBackupSystem(context)
             context.registerScheduler(self)
-            self.schedWatcher.UpdateContext(context)
         self.binStorage.UpdateContext(self.context)
         self.tagRef.UpdateContext(self.context)
         PacketCustomLogic.UpdateContext(self.context)
         self.connManager.UpdateContext(self.context)
+        self.HasScheduledTask = threading.Condition(self.lock)
+        self.schedWatcher.UpdateContext(self.context)
 
     def OnWaitingStart(self, ref):
         if isinstance(ref, JobPacket):
@@ -164,7 +164,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 logging.debug("Scheduler waiting for condition")
                 self.HasScheduledTask.wait()
 
-            if self.alive not self.schedWatcher.Empty():
+            if self.alive and not self.schedWatcher.Empty():
                 schedRunner = self.schedWatcher.GetTask()
                 if schedRunner:
                     return FuncJob(schedRunner)
@@ -336,7 +336,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def Start(self):
         with self.lock:
             self.alive = True
-            self.HasScheduledTask.notify_all()
+            #self.HasScheduledTask.notify_all()
         self.connManager.Start()
 
     def Stop(self):
