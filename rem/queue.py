@@ -98,6 +98,8 @@ class Queue(Unpickable(pending=PackSet.create,
                 with self.lock: dest_queue.add(pck)
             if pck.state == PacketState.PENDING:
                 self.FireEvent("task_pending")
+            if pck.state == PacketState.NONINITIALIZED:
+                self.FireEvent("packet_noninitialized")
 
     def OnPendingPacket(self, ref):
         self.FireEvent("task_pending")
@@ -133,15 +135,15 @@ class Queue(Unpickable(pending=PackSet.create,
         pck.Resume()
 
     def ScheduleNonitializedRestoring(self, context):
+        logging.debug("Scheduling nonitinialized restoring")
         with self.lock:
             while len(self.noninitialized) != 0:
+                logging.debug("Find noninitialized packet")
                 pck = self.noninitialized.pop()
                 context.Scheduler.ScheduleTask(0, self.RestoreNoninitialized, pck, context)
 
     def Get(self, context):
         DELAY = 5
-        if self.noninitialized:
-            self.ScheduleNonitializedRestoring(context)
         pckIncorrect = None
         while True:
             if not self.HasStartableJobs():

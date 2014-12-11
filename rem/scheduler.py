@@ -59,7 +59,10 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
 
     def GetTask(self):
         logging.debug("Requested watcher`s task")
-        return self.workingQueue.get()
+        if not self.workingQueue.empty():
+            return self.workingQueue.get()
+        else:
+            return None
 
     def HasStartableJobs(self):
         return not self.workingQueue.empty()
@@ -331,6 +334,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         return self.packStorage.GetPacket(pck_id)
 
     def ScheduleTask(self, runtm, fn, *args, **kws):
+        logging.debug("Try to schedule task")
         self.schedWatcher.AddTask(runtm, fn, *args, **kws)
 
     def Start(self):
@@ -351,5 +355,10 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def OnTaskPending(self, ref):
         logging.debug("Some task pending")
         self.Notify(ref)
+    
+    def OnPacketNoninitialized(self, ref):
+        logging.debug("Packet noninitialized")
+        if ref.noninitialized:
+            ref.ScheduleNonitializedRestoring(self.context)
 
 
