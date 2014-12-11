@@ -55,6 +55,7 @@ class Queue(Unpickable(pending=PackSet.create,
     def OnJobDone(self, ref):
         with self.lock:
             self.working.discard(ref)
+        self.FireEvent("task_pending")
 
     def OnChange(self, ref):
         if isinstance(ref, JobPacket):
@@ -97,6 +98,9 @@ class Queue(Unpickable(pending=PackSet.create,
                 with self.lock: dest_queue.add(pck)
             if pck.state == PacketState.PENDING:
                 self.FireEvent("task_pending")
+
+    def OnPendingPacket(self, ref):
+        self.FireEvent("task_pending")
 
     def IsAlive(self):
         return not self.isSuspended

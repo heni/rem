@@ -13,6 +13,7 @@ import re
 import xmlrpclib
 from Queue import Queue as StdQueue
 from Queue import PriorityQueue as StdPriorityQueue
+import heapq
 
 from heap import PriorityQueue
 import osspec
@@ -309,6 +310,9 @@ class PickableStdPriorityQueue(Unpickable(_object=StdPriorityQueue)):
 
     def __getstate__(self):
         return dict(copy.copy(self.queue))
+
+    def peak(self):
+        return heapq.nsmallest(1, self._object.queue)[0]
 
 
 class PickableStdQueue(Unpickable(_object=StdQueue)):

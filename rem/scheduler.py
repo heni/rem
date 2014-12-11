@@ -31,19 +31,19 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
                    ICallbackAcceptor):
     def OnTick(self, ref):
         tm = time.time()
+        logging.debug("Check scheduled task. Current task size:{}".format(self.tasks.qsize()))
         while not self.tasks.empty():
-            runner = None
             with self.lock:
-                if not self.tasks.empty():
-                    runner, runtm = self.tasks.get()
-                    if runtm > tm:
-                        break
-                else:
+                logging.debug("Tasks not empty")
+                runtm, runner = self.tasks.peak()
+                if runtm > tm:
+                    logging.debug("Next tasks planned at %s", time.ctime(runtm))
                     break
-            if runner:
-                logging.debug("SchedWatcher notify scheduler")
-                self.workingQueue.put(runner)
-                self.scheduler.notify(self)
+                else:
+                    self.tasks.get()
+                    logging.debug("SchedWatcher notify scheduler")
+                    self.workingQueue.put(runner)
+                    self.scheduler.Notify(self)
 
     def AddTask(self, runtm, fn, *args, **kws):
         if "skip_logging" in kws:
@@ -53,7 +53,9 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
         if not skipLoggingFlag:
             logging.debug("new task %r scheduled on %s", fn, time.ctime(time.time() + runtm))
         with self.lock:
-            self.tasks.put((FuncRunner(fn, args, kws), runtm + time.time()))
+            logging.debug("START : task put into tasks queue : {}".format(self.tasks.queue))
+            self.tasks.put((runtm + time.time(), (FuncRunner(fn, args, kws))))
+            logging.debug("END: task put into tasks queue : {}".format(self.tasks.queue))
 
     def GetTask(self):
         logging.debug("Requested watcher`s task")
@@ -75,7 +77,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue,
 
     def __getstate__(self):
         sdict = self.__dict__.copy()
-        sdict["tasks"] = sdict["tasks"].copy()
+        #sdict["tasks"] = sdict["tasks"].copy()
         return getattr(super(SchedWatcher, self), "__getstate__", lambda: sdict)()
 
 
@@ -113,7 +115,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.poolSize = context.thread_pool_size
             self.initBackupSystem(context)
             context.registerScheduler(self)
-        self.schedWatcher.UpdateContext(context)
+            self.schedWatcher.UpdateContext(context)
         self.binStorage.UpdateContext(self.context)
         self.tagRef.UpdateContext(self.context)
         PacketCustomLogic.UpdateContext(self.context)
@@ -154,7 +156,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             q = self.qRef[qname] = Queue(qname)
             q.UpdateContext(self.context)
             q.AddCallbackListener(self)
-            self.qList.append(q)
             return q
 
     def Get(self):
@@ -163,7 +164,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 logging.debug("Scheduler waiting for condition")
                 self.HasScheduledTask.wait()
 
-            if not self.schedWatcher.Empty():
+            if self.alive not self.schedWatcher.Empty():
                 schedRunner = self.schedWatcher.GetTask()
                 if schedRunner:
                     return FuncJob(schedRunner)
@@ -188,8 +189,15 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                     if not self.in_deque.get(queue.name, False):
                         self.qList.append(queue.name)
                         self.in_deque[queue.name] = True
-        logging.debug("Scheduler notified")
-        self.HasScheduledTask.notify()
+                        logging.debug("Scheduler notified by queue %s", ref.name)
+                        self.HasScheduledTask.notify()
+        elif isinstance(ref, SchedWatcher):
+            if ref.Empty():
+                return
+            with self.lock:
+                if not ref.Empty():
+                    logging.debug("Scheduler notified by SchedWatcher")
+                    self.HasScheduledTask.notify()
 
 
     def CheckBackupFilename(self, filename):
@@ -326,12 +334,16 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.schedWatcher.AddTask(runtm, fn, *args, **kws)
 
     def Start(self):
-        self.alive = True
+        with self.lock:
+            self.alive = True
+            self.HasScheduledTask.notify_all()
         self.connManager.Start()
 
     def Stop(self):
-        self.alive = False
         self.connManager.Stop()
+        with self.lock:
+            self.alive = False
+            self.HasScheduledTask.notify_all()
 
     def GetConnectionManager(self):
         return self.connManager
