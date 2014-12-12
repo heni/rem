@@ -135,10 +135,8 @@ class Queue(Unpickable(pending=PackSet.create,
         pck.Resume()
 
     def ScheduleNonitializedRestoring(self, context):
-        logging.debug("Scheduling nonitinialized restoring")
         with self.lock:
             while len(self.noninitialized) != 0:
-                logging.debug("Find noninitialized packet")
                 pck = self.noninitialized.pop()
                 context.Scheduler.ScheduleTask(0, self.RestoreNoninitialized, pck, context)
 

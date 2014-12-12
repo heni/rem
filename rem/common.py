@@ -301,6 +301,10 @@ class PickableStdPriorityQueue(Unpickable(_object=StdPriorityQueue)):
         if isinstance(dct, cls):
             return dct
         obj = cls()
+        if isinstance(dct, PriorityQueue):
+            for value, key in zip(dct.__dict__['objects'], dct.__dict__['values']):
+                obj.put((key, value))
+            return obj
         for key, value in dct.iteritems():
             obj.put((key, value))
         return obj

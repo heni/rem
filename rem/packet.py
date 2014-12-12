@@ -355,7 +355,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.changeState(PacketState.PENDING)
 
     def changeState(self, state):
-        logging.debug("packet %s change state to %s", self.id, state)
         if state == self.state:
             return
         if not self.canChangeState(state):
@@ -456,7 +455,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         allowed_states = [PacketState.CREATED, PacketState.SUSPENDED]
         if resumeWorkable:
             allowed_states.append(PacketState.WORKABLE)
-        logging.debug("allowed states: %s, packet state: %s", allowed_states, self.state)
         if self.state in allowed_states and not self.CheckFlag(PacketFlag.USER_SUSPEND):
             self.ClearFlag(~0)
             if len(self.waitTags) != 0:
@@ -616,7 +614,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             job.Terminate()
 
     def Reset(self):
-        logging.debug("packet %s reseted", self.id)
         self.changeState(PacketState.NONINITIALIZED)
         self.KillJobs()
         if self.done_indicator:
@@ -629,7 +626,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.done.clear()
         for job in self.jobs.values():
             job.results = []
-        logging.debug("packet %s do resume", self.id)
         self.Resume()
 
     def OnReset(self, ref):

@@ -9,6 +9,7 @@ import re
 from collections import deque
 from cPickle import Pickler, Unpickler
 import gc
+import sys
 from threading import Condition
 from common import PickableStdQueue
 from common import PickableStdPriorityQueue
@@ -31,17 +32,13 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
                    ICallbackAcceptor):
     def OnTick(self, ref):
         tm = time.time()
-        logging.debug("Check scheduled task. Current task size:{}".format(self.tasks.qsize()))
         while not self.tasks.empty():
             with self.lock:
-                logging.debug("Tasks not empty")
                 runtm, runner = self.tasks.peak()
                 if runtm > tm:
-                    logging.debug("Next tasks planned at %s", time.ctime(runtm))
                     break
                 else:
                     self.tasks.get()
-                    logging.debug("SchedWatcher notify scheduler")
                     self.workingQueue.put(runner)
                     self.scheduler.Notify(self)
 
@@ -53,12 +50,9 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
         if not skipLoggingFlag:
             logging.debug("new task %r scheduled on %s", fn, time.ctime(time.time() + runtm))
         with self.lock:
-            logging.debug("START : task put into tasks queue : {}".format(self.tasks.queue))
             self.tasks.put((runtm + time.time(), (FuncRunner(fn, args, kws))))
-            logging.debug("END: task put into tasks queue : {}".format(self.tasks.queue))
 
     def GetTask(self):
-        logging.debug("Requested watcher`s task")
         if not self.workingQueue.empty():
             return self.workingQueue.get()
         else:
@@ -164,7 +158,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def Get(self):
         with self.lock:
             while self.alive and not self.qList and self.schedWatcher.Empty():
-                logging.debug("Scheduler waiting for condition")
                 self.HasScheduledTask.wait()
 
             if self.alive and not self.schedWatcher.Empty():
@@ -174,8 +167,15 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
             if self.alive and self.qList:
                 qname = self.qList.popleft()
+                if isinstance(qname, Queue):
+                    qname = qname.name
                 self.in_deque[qname] = False
-                job = self.qRef[qname].Get(self.context)
+                try:
+                    job = self.qRef[qname].Get(self.context)
+                except Exception, e:
+                    logging.exception("%s", e)
+                    logging.debug("QREF = {}".format(self.qRef))
+                    return
                 if self.qRef[qname].HasStartableJobs():
                     self.qList.append(qname)
                     self.in_deque[qname] = True
@@ -192,14 +192,12 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                     if not self.in_deque.get(queue.name, False):
                         self.qList.append(queue.name)
                         self.in_deque[queue.name] = True
-                        logging.debug("Scheduler notified by queue %s", ref.name)
                         self.HasScheduledTask.notify()
         elif isinstance(ref, SchedWatcher):
             if ref.Empty():
                 return
             with self.lock:
                 if not ref.Empty():
-                    logging.debug("Scheduler notified by SchedWatcher")
                     self.HasScheduledTask.notify()
 
 
@@ -235,6 +233,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def SaveData(self, filename):
         gc.collect()
+
         sdict = {"qList": copy.copy(self.qList),
                  "qRef": copy.copy(self.qRef),
                  "tagRef": self.tagRef,
@@ -334,7 +333,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         return self.packStorage.GetPacket(pck_id)
 
     def ScheduleTask(self, runtm, fn, *args, **kws):
-        logging.debug("Try to schedule task")
         self.schedWatcher.AddTask(runtm, fn, *args, **kws)
 
     def Start(self):
@@ -353,11 +351,9 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         return self.connManager
 
     def OnTaskPending(self, ref):
-        logging.debug("Some task pending")
         self.Notify(ref)
     
     def OnPacketNoninitialized(self, ref):
-        logging.debug("Packet noninitialized")
         if ref.noninitialized:
             ref.ScheduleNonitializedRestoring(self.context)
 
