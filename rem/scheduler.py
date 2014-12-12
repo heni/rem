@@ -269,6 +269,9 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             assert isinstance(sdict, dict)
             #update internal structures
             qRef = sdict.pop("qRef")
+            qList = sdict.pop("qList")
+            qList = deque([q for q in qList if q in qRef])
+            self.qList = qList
             self.__setstate__(sdict)
             self.UpdateContext(None)
             self.RegisterQueues(qRef)
