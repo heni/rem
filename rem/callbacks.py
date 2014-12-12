@@ -48,10 +48,11 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
 
     def __getstate__(self):
         sdict = self.__dict__.copy()
-        callbacks = dict(sdict.pop("callbacks"))
-        if callbacks:
-            sdict["callbacks"] = callbacks
+        callbacks = sdict.pop("callbacks")
+        sdict['callbacks'] = {}
         del sdict["nonpersistent_callbacks"]
+        for k,v in callbacks.iteritems():
+            sdict['callbacks'][k] = v
         return sdict
 
 

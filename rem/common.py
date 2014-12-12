@@ -11,6 +11,9 @@ import time
 import types
 import re
 import xmlrpclib
+from Queue import Queue as StdQueue
+from Queue import PriorityQueue as StdPriorityQueue
+import heapq
 
 from heap import PriorityQueue
 import osspec
@@ -289,6 +292,52 @@ class TimedMap(PriorityQueue):
 
     def remove(self, obj):
         return self.pop(obj)
+
+
+class PickableStdPriorityQueue(Unpickable(_object=StdPriorityQueue)):
+    @classmethod
+    def create(cls, dct=None):
+        if not dct: dct = {}
+        if isinstance(dct, cls):
+            return dct
+        obj = cls()
+        if isinstance(dct, PriorityQueue):
+            for value, key in zip(dct.__dict__['objects'], dct.__dict__['values']):
+                obj.put((key, value))
+            return obj
+        for key, value in dct.iteritems():
+            obj.put((key, value))
+        return obj
+
+    def __getattr__(self, attrname):
+        return getattr(self._object, attrname)
+
+    def __getstate__(self):
+        return dict(copy.copy(self.queue))
+
+    def peak(self):
+        return heapq.nsmallest(1, self._object.queue)[0]
+
+
+class PickableStdQueue(Unpickable(_object=StdQueue)):
+    @classmethod
+    def create(cls, dct=None):
+        if not dct: dct = {}
+        if isinstance(dct, cls):
+            return dct
+        obj = cls()
+        for item in dct.get('queue', ()):
+            obj.put(item)
+        return obj
+
+    def __getattr__(self, attrname):
+        return getattr(self._object, attrname)
+
+    def __getstate__(self):
+        sdict = dict()
+        sdict['queue'] = copy.copy(self._object.__dict__['queue'])
+        return sdict
+
 
 
 def GeneralizedSet(priorAttr):

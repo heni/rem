@@ -16,7 +16,6 @@ import xmlrpclib
 
 from rem import *
 
-
 class DuplicatePackageNameException(Exception):
     def __init__(self, pck_name, serv_name, *args, **kwargs):
         super(DuplicatePackageNameException, self).__init__(*args, **kwargs)
@@ -432,18 +431,17 @@ class RemDaemon(object):
         self.timeWorker = None
 
     def process_backups(self):
-        sys.setrecursionlimit(10000)
-        TIMEOUT = 0.01
+        sys.setrecursionlimit(20000)
         nextBackupTime = time.time() + self.scheduler.backupPeriod
         while self.scheduler.alive:
-            if time.time() > nextBackupTime:
+            if time.time() >= nextBackupTime:
                 try:
                     self.scheduler.RollBackup()
                 except Exception, e:
                     logging.exception("rem-server\tbackup error : %s", e)
                 finally:
                     nextBackupTime = time.time() + self.scheduler.backupPeriod
-            time.sleep(TIMEOUT)
+            time.sleep(self.scheduler.backupPeriod)
 
     def signal_handler(self, signum, frame):
         logging.warning("rem-server\tsignal %s has gotten", signum)

@@ -55,6 +55,7 @@ class Queue(Unpickable(pending=PackSet.create,
     def OnJobDone(self, ref):
         with self.lock:
             self.working.discard(ref)
+        self.FireEvent("task_pending")
 
     def OnChange(self, ref):
         if isinstance(ref, JobPacket):
@@ -95,6 +96,13 @@ class Queue(Unpickable(pending=PackSet.create,
                 with self.lock: src_queue.remove(pck)
             if dest_queue is not None:
                 with self.lock: dest_queue.add(pck)
+            if pck.state == PacketState.PENDING:
+                self.FireEvent("task_pending")
+            if pck.state == PacketState.NONINITIALIZED:
+                self.FireEvent("packet_noninitialized")
+
+    def OnPendingPacket(self, ref):
+        self.FireEvent("task_pending")
 
     def IsAlive(self):
         return not self.isSuspended
@@ -134,8 +142,6 @@ class Queue(Unpickable(pending=PackSet.create,
 
     def Get(self, context):
         DELAY = 5
-        if self.noninitialized:
-            self.ScheduleNonitializedRestoring(context)
         pckIncorrect = None
         while True:
             if not self.HasStartableJobs():
