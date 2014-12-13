@@ -49,14 +49,14 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
             skipLoggingFlag = False
         if not skipLoggingFlag:
             logging.debug("new task %r scheduled on %s", fn, time.ctime(time.time() + runtm))
-        with self.lock:
-            self.tasks.put((runtm + time.time(), (FuncRunner(fn, args, kws))))
+        self.tasks.put((runtm + time.time(), (FuncRunner(fn, args, kws))))
 
     def GetTask(self):
         if not self.workingQueue.empty():
-            return self.workingQueue.get()
-        else:
-            return None
+            try:
+                return self.workingQueue.get_nowait()
+            except:
+                return None
 
     def HasStartableJobs(self):
         return not self.workingQueue.empty()
