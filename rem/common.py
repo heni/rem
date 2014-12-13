@@ -326,6 +326,10 @@ class PickableStdQueue(Unpickable(_object=StdQueue)):
         if isinstance(dct, cls):
             return dct
         obj = cls()
+        if isinstance(dct, list):
+            for item in dct:
+                obj.put(item)
+            return obj
         for item in dct.get('queue', ()):
             obj.put(item)
         return obj
