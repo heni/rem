@@ -330,7 +330,7 @@ class PickableStdQueue(Unpickable(_object=StdQueue)):
             for item in dct:
                 obj.put(item)
             return obj
-        for item in dct.get('queue', ()):
+        for item in getattr(dct, 'queue', ()):
             obj.put(item)
         return obj
 

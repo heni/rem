@@ -55,7 +55,8 @@ class Queue(Unpickable(pending=PackSet.create,
     def OnJobDone(self, ref):
         with self.lock:
             self.working.discard(ref)
-        self.FireEvent("task_pending")
+        if self.HasStartableJobs():
+            self.FireEvent("task_pending")
 
     def OnChange(self, ref):
         if isinstance(ref, JobPacket):
@@ -141,14 +142,13 @@ class Queue(Unpickable(pending=PackSet.create,
                 context.Scheduler.ScheduleTask(0, self.RestoreNoninitialized, pck, context)
 
     def Get(self, context):
-        DELAY = 5
         pckIncorrect = None
         while True:
             if not self.HasStartableJobs():
-                return
+                return None
             with self.lock:
                 if not self.HasStartableJobs():
-                    return
+                    return None
                 pck, prior = self.pending.peak()
                 pendingJob = pck.Get()
                 if pendingJob == JobPacket.INCORRECT:
@@ -156,12 +156,11 @@ class Queue(Unpickable(pending=PackSet.create,
                     if pck == pckIncorrect:
                         PacketCustomLogic(pck).DoEmergencyAction()
                         self.pending.pop()
-                        return
+                        return None
                     else:
                         pckIncorrect = pck
                 else:
                     return pendingJob
-            time.sleep(DELAY)
 
     def ListAllPackets(self):
         return itertools.chain(*(getattr(self, q) for q in self.VIEW_BY_ORDER))

@@ -170,12 +170,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 if isinstance(qname, Queue):
                     qname = qname.name
                 self.in_deque[qname] = False
-                try:
-                    job = self.qRef[qname].Get(self.context)
-                except Exception, e:
-                    logging.exception("%s", e)
-                    logging.debug("QREF = {}".format(self.qRef))
-                    return
+                job = self.qRef[qname].Get(self.context)
                 if self.qRef[qname].HasStartableJobs():
                     self.qList.append(qname)
                     self.in_deque[qname] = True
@@ -341,7 +336,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def Start(self):
         with self.lock:
             self.alive = True
-            #self.HasScheduledTask.notify_all()
         self.connManager.Start()
 
     def Stop(self):

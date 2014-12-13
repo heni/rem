@@ -37,21 +37,13 @@ class KillableWorker(threading.Thread):
 
 
 class ThreadJobWorker(KillableWorker):
-    TICK_PERIOD = 0.1
+    TICK_PERIOD = 0.0
 
     def __init__(self, scheduler):
         super(ThreadJobWorker, self).__init__()
         self.pids = None
         self.scheduler = scheduler
         self.suspended = False
-
-    def run(self):
-        while not self.IsKilled():
-            try:
-                self.do()
-            except Exception, e:
-                logging.exception("worker\tjob execution error %s", e)
-            #time.sleep(self.tickTime)
 
     def do(self):
         if not self.IsSuspended() and self.scheduler.alive:
