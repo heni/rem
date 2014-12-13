@@ -100,7 +100,10 @@ import itertools
 import datetime
 from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY, DENY_DUPLICATE_NAMES_POLICY, KILL_JOB_DEFAULT_TIMEOUT, NOTIFICATION_TIMEOUT, WARN_DUPLICATE_NAMES_POLICY
 
-__all__ = ["AdminConnector", "Connector"]
+__all__ = [
+    "AdminConnector", "Connector",
+    "DEFAULT_DUPLICATE_NAMES_POLICY", "IGNORE_DUPLICATE_NAMES_POLICY", "DENY_DUPLICATE_NAMES_POLICY", "WARN_DUPLICATE_NAMES_POLICY"
+]
 MAX_PRIORITY = 2**31 - 1
 
 
@@ -476,6 +479,37 @@ class JobPacketInfo(object):
 
         return sum(get_res_working_time(res) for res in itertools.chain(*(job.results for job in self.jobs)))
 
+    def EnumerateJobs(self, descending_order=False):
+        id2job = {}
+        edges = {}
+        for job in self.jobs:
+            id2job[int(job.id)] = job
+            for pj in job.parents:
+                edges.setdefault(int(pj), set()).add(int(job.id))
+        visitStack, visitList, visitMark = [], [], set()
+        for jid in id2job:
+            if jid in visitMark:
+                continue
+            visitMark.add(jid)
+            visitStack.append((jid, edges.get(jid, set())))
+            while visitStack:
+                _jid, neighbours = visitStack.pop()
+                nid = None
+                while neighbours:
+                    _nid = neighbours.pop()
+                    if _nid not in visitMark:
+                        nid = _nid
+                        break
+                if nid is not None:
+                    visitStack.append((_jid, neighbours))
+                    visitMark.add(nid)
+                    visitStack.append((nid, edges.get(nid, set())))
+                else:
+                    visitList.append(id2job[_jid])
+        if not descending_order:
+            visitList.reverse()
+        return visitList
+
 
 class JobInfo(object):
     """объект, инкапсулирующий информацию о задаче REM"""
@@ -703,7 +737,7 @@ class _RetriableMethod:
 
     def __call__(self, *args):
         lastExc = None
-        for trying in itertools.count():
+        for trying in itertools.count(1):
             try:
                 return self.method(*args)
             except self.IgnoreExcType, lastExc:
@@ -712,7 +746,7 @@ class _RetriableMethod:
                     logging.getLogger('remclient.default').error("%s: execution for method %s failed [try: %d]\t%s", time.time(), name, trying, lastExc)
             if trying >= self.tryCount:
                 break
-            time.sleep(self.__timeout__(trying + 1))
+            time.sleep(self.__timeout__(trying))
         raise lastExc
 
 
