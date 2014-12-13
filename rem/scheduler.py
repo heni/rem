@@ -21,7 +21,7 @@ from connmanager import ConnectionManager
 from packet import JobPacket, PacketState, PacketFlag
 from queue import Queue
 from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage, MessageStorage
-from callbacks import ICallbackAcceptor
+from callbacks import ICallbackAcceptor, CallbackHolder
 
 
 
@@ -29,7 +29,8 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
                               lock=PickableLock.create,
                               workingQueue=PickableStdQueue.create
                             ),
-                   ICallbackAcceptor):
+                   ICallbackAcceptor,
+                   CallbackHolder):
     def OnTick(self, ref):
         tm = time.time()
         while not self.tasks.empty():
@@ -65,7 +66,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
         return not self.HasStartableJobs()
 
     def UpdateContext(self, context):
-        self.scheduler = context.Scheduler
+        self.AddNonpersistentCallbackListener(context.Scheduler)
 
     def ListTasks(self):
         task_lst = [(str(o), tm) for o, tm in self.tasks.items()]
