@@ -41,7 +41,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
                 else:
                     self.tasks.get()
                     self.workingQueue.put(runner)
-                    self.scheduler.Notify(self)
+                    self.FireEvent("task_pending")
 
     def AddTask(self, runtm, fn, *args, **kws):
         if "skip_logging" in kws:
