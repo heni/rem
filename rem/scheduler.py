@@ -66,7 +66,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
         return not self.HasStartableJobs()
 
     def UpdateContext(self, context):
-        self.AddCallbackListener(context.Scheduler)
+        self.AddNonpersistentCallbackListener(context.Scheduler)
 
     def ListTasks(self):
         task_lst = [(str(o), tm) for o, tm in self.tasks.items()]
@@ -152,7 +152,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         with self.lock:
             q = self.qRef[qname] = Queue(qname)
             q.UpdateContext(self.context)
-            q.AddCallbackListener(self)
+            q.AddNonpersistentCallbackListener(self)
             return q
 
     def Get(self):
@@ -279,7 +279,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def RegisterQueues(self, qRef):
         for qname, q in qRef.iteritems():
             q.UpdateContext(self.context)
-            q.AddCallbackListener(self)
+            q.AddNonpersistentCallbackListener(self)
             for pck in list(q.ListAllPackets()):
                 dstStorage = self.packStorage
                 pck.UpdateTagDependencies(self.tagRef)
