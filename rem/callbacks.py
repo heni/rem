@@ -38,7 +38,7 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
             if isinstance(obj(), ICallbackAcceptor):
                 obj().AcceptCallback(reference or self, event)
             else:
-                logging.warning("callback %r\tincorrect acceptor found: %s", self, obj())
+                logging.warning("callback %r\tincorrect acceptor for %s found: %s", self, event, obj())
                 bad_listeners.add(obj())
         for obj in bad_listeners:
             self.DropCallbackListener(obj)
