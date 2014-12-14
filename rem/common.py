@@ -298,9 +298,13 @@ class PickableStdPriorityQueue(Unpickable(_object=StdPriorityQueue)):
     @classmethod
     def create(cls, dct=None):
         if not dct: dct = {}
-        if isinstance(dct, cls):
-            return dct
         obj = cls()
+        if isinstance(dct, cls):
+            for key, value in dct.__dict__.iteritems():
+                if key != "_object":
+                    obj.put((key, value))
+            return obj
+
         if isinstance(dct, PriorityQueue):
             for value, key in zip(dct.__dict__['objects'], dct.__dict__['values']):
                 obj.put((key, value))
@@ -323,15 +327,15 @@ class PickableStdQueue(Unpickable(_object=StdQueue)):
     @classmethod
     def create(cls, dct=None):
         if not dct: dct = {}
-        if isinstance(dct, cls):
-            return dct
         obj = cls()
         if isinstance(dct, list):
             for item in dct:
                 obj.put(item)
             return obj
-        for item in getattr(dct, 'queue', ()):
-            obj.put(item)
+        if isinstance(dct, cls):
+            for item in getattr(dct, 'queue', ()):
+                obj.put(item)
+            return obj
         return obj
 
     def __getattr__(self, attrname):

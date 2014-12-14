@@ -66,7 +66,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
         return not self.HasStartableJobs()
 
     def UpdateContext(self, context):
-        self.AddNonpersistentCallbackListener(context.Scheduler)
+        self.AddCallbackListener(context.Scheduler)
 
     def ListTasks(self):
         task_lst = [(str(o), tm) for o, tm in self.tasks.items()]
@@ -75,7 +75,6 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
 
     def __getstate__(self):
         sdict = self.__dict__.copy()
-        sdict["tasks"] = sdict["tasks"].__getstate__()
         return getattr(super(SchedWatcher, self), "__getstate__", lambda: sdict)()
 
 
