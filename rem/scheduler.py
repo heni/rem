@@ -75,7 +75,6 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
 
     def __getstate__(self):
         sdict = self.__dict__.copy()
-        sdict["tasks"] = sdict["tasks"].__getstate__()
         return getattr(super(SchedWatcher, self), "__getstate__", lambda: sdict)()
 
 
