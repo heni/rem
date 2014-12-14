@@ -21,7 +21,7 @@ from connmanager import ConnectionManager
 from packet import JobPacket, PacketState, PacketFlag
 from queue import Queue
 from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage, MessageStorage
-from callbacks import ICallbackAcceptor
+from callbacks import ICallbackAcceptor, CallbackHolder
 
 
 
@@ -29,7 +29,8 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
                               lock=PickableLock.create,
                               workingQueue=PickableStdQueue.create
                             ),
-                   ICallbackAcceptor):
+                   ICallbackAcceptor,
+                   CallbackHolder):
     def OnTick(self, ref):
         tm = time.time()
         while not self.tasks.empty():
@@ -40,7 +41,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
                 else:
                     self.tasks.get()
                     self.workingQueue.put(runner)
-                    self.scheduler.Notify(self)
+                    self.FireEvent("task_pending")
 
     def AddTask(self, runtm, fn, *args, **kws):
         if "skip_logging" in kws:
@@ -49,14 +50,14 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
             skipLoggingFlag = False
         if not skipLoggingFlag:
             logging.debug("new task %r scheduled on %s", fn, time.ctime(time.time() + runtm))
-        with self.lock:
-            self.tasks.put((runtm + time.time(), (FuncRunner(fn, args, kws))))
+        self.tasks.put((runtm + time.time(), (FuncRunner(fn, args, kws))))
 
     def GetTask(self):
         if not self.workingQueue.empty():
-            return self.workingQueue.get()
-        else:
-            return None
+            try:
+                return self.workingQueue.get_nowait()
+            except:
+                return None
 
     def HasStartableJobs(self):
         return not self.workingQueue.empty()
@@ -65,7 +66,7 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
         return not self.HasStartableJobs()
 
     def UpdateContext(self, context):
-        self.scheduler = context.Scheduler
+        self.AddNonpersistentCallbackListener(context.Scheduler)
 
     def ListTasks(self):
         task_lst = [(str(o), tm) for o, tm in self.tasks.items()]
@@ -170,12 +171,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 if isinstance(qname, Queue):
                     qname = qname.name
                 self.in_deque[qname] = False
-                try:
-                    job = self.qRef[qname].Get(self.context)
-                except Exception, e:
-                    logging.exception("%s", e)
-                    logging.debug("QREF = {}".format(self.qRef))
-                    return
+                job = self.qRef[qname].Get(self.context)
                 if self.qRef[qname].HasStartableJobs():
                     self.qList.append(qname)
                     self.in_deque[qname] = True
@@ -341,7 +337,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def Start(self):
         with self.lock:
             self.alive = True
-            #self.HasScheduledTask.notify_all()
         self.connManager.Start()
 
     def Stop(self):
