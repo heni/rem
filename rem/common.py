@@ -320,7 +320,7 @@ class PickableStdPriorityQueue(Unpickable(_object=StdPriorityQueue)):
         return dict(copy.copy(self.queue))
 
     def peak(self):
-        return heapq.nsmallest(1, self._object.queue)[0]
+        return self._object.queue[0]
 
 
 class PickableStdQueue(Unpickable(_object=StdQueue)):
