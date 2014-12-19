@@ -129,7 +129,7 @@ class Queue(Unpickable(pending=PackSet.create,
         self.movePacket(pck, None)
 
     def HasStartableJobs(self):
-        return self.pending and len(self.working) < self.workingLimit
+        return self.pending and len(self.working) < self.workingLimit and self.IsAlive()
 
     def RestoreNoninitialized(self, pck, context):
         pck.Init(context)
@@ -208,8 +208,8 @@ class Queue(Unpickable(pending=PackSet.create,
         return {"alive": self.IsAlive(), "pending": len(self.pending), "suspended": len(self.suspended),
                 "errored": len(self.errored), "worked": len(self.worked),
                 "waiting": len(self.waited), "working": len(self.working), "working-limit": self.workingLimit, 
-                "success-lifetime": self.success_lifetime if self.success_lifetime >= 0 else self.successForgetTm, 
-                "error-lifetime": self.errored_lifetime if self.errored_lifetime >= 0 else self.errorForgetTm}
+                "success-lifetime": self.success_lifetime if self.success_lifetime > 0 else self.successForgetTm,
+                "error-lifetime": self.errored_lifetime if self.errored_lifetime > 0 else self.errorForgetTm}
 
     def ChangeWorkingLimit(self, lmtValue):
         self.workingLimit = int(lmtValue)

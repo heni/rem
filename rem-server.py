@@ -441,7 +441,7 @@ class RemDaemon(object):
                     logging.exception("rem-server\tbackup error : %s", e)
                 finally:
                     nextBackupTime = time.time() + self.scheduler.backupPeriod
-            time.sleep(self.scheduler.backupPeriod)
+            time.sleep(max(self.scheduler.backupPeriod, 0.01))
 
     def signal_handler(self, signum, frame):
         logging.warning("rem-server\tsignal %s has gotten", signum)
