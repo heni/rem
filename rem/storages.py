@@ -245,8 +245,6 @@ class TagStorage(object):
                 tagDescr = self.infile_items.get(tagname, None)
                 if tagDescr:
                     tag = cPickle.loads(tagDescr)
-                    if hasattr(tag, 'message_queue'):
-                        del tag.message_queue
                 else:
                     tag = RemoteTag(tagname) if self.IsRemoteName(tagname) else Tag(tagname)
             for obj in self.additional_listeners:
