@@ -497,3 +497,8 @@ def CheckEmailAddress(email):
 def SendEmail(emails, msg_helper):
     if msg_helper:
         return osspec.send_email(emails, msg_helper.subject(), msg_helper.message())
+
+
+def DiscardKey(d, key):
+    if key in d:
+        del d[key]

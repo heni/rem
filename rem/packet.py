@@ -394,8 +394,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                     if nState == PacketState.WAITING and nTimeout:
                         self.waitingTime = nTimeout
                     self.changeState(nState)
-                    if nState == PacketState.PENDING:
-                        self.FireEvent("pending_packet")
         elif isinstance(ref, Tag):
             self.ProcessTagEvent(ref)
 

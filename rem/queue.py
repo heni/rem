@@ -128,8 +128,15 @@ class Queue(Unpickable(pending=PackSet.create,
             self.working.difference_update(pck.GetWorkingJobs())
         self.movePacket(pck, None)
 
-    def HasStartableJobs(self):
+
+    def _CheckStartableJobs(self):
         return self.pending and len(self.working) < self.workingLimit and self.IsAlive()
+
+    def HasStartableJobs(self, block=True):
+        if block:
+            with self.lock:
+                return self._CheckStartableJobs()
+        return self._CheckStartableJobs()
 
     def RestoreNoninitialized(self, pck, context):
         pck.Init(context)
@@ -137,17 +144,15 @@ class Queue(Unpickable(pending=PackSet.create,
 
     def ScheduleNonitializedRestoring(self, context):
         with self.lock:
-            while len(self.noninitialized) != 0:
+            while self.noninitialized:
                 pck = self.noninitialized.pop()
                 context.Scheduler.ScheduleTask(0, self.RestoreNoninitialized, pck, context)
 
     def Get(self, context):
         pckIncorrect = None
         while True:
-            if not self.HasStartableJobs():
-                return None
             with self.lock:
-                if not self.HasStartableJobs():
+                if not self.HasStartableJobs(False):
                     return None
                 pck, prior = self.pending.peak()
                 pendingJob = pck.Get()
@@ -213,6 +218,8 @@ class Queue(Unpickable(pending=PackSet.create,
 
     def ChangeWorkingLimit(self, lmtValue):
         self.workingLimit = int(lmtValue)
+        if self._CheckStartableJobs:
+            self.FireEvent('task_pending')
 
     def Empty(self):
         return not any(getattr(self, subq_name, None) for subq_name in self.VIEW_BY_ORDER)
