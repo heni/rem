@@ -367,9 +367,3 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def OnPacketNoninitialized(self, ref):
         if ref.noninitialized:
             ref.ScheduleNonitializedRestoring(self.context)
-
-
-str ='sthsh'
-str.startswith()
-s = set()
-s.update([1,2,4])
