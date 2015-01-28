@@ -283,6 +283,7 @@ class Job(Unpickable(err=nullobject,
     def Terminate(self):
         self.alive = False
         pids = self.running_pids
+        self.CloseStreams()
         if pids:
             logging.debug("trying to terminate processes with pids: %s", ",".join(map(str, pids)))
             for pid in list(pids):

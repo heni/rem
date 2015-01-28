@@ -120,10 +120,10 @@ class LifeCommander(ICommander):
         elif self.type == "restart":
             if not isinstance(object, remclient.JobPacketInfo):
                 raise CommandExecutionError("only packets may be restarted")
-            if object.state == 'SUCCESSFULL':
-                object.Restart()
-            else:
+            if object.state == 'ERROR':
                 object.RestartFromErrors()
+            else:
+                object.Restart()
         elif self.type == "delete":
             object.Delete()
         else:
