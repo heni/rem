@@ -257,7 +257,7 @@ class Job(Unpickable(err=nullobject,
                 try:
                     self.output = open(self.output.name, 'r')
                 except IOError:
-                    #place released
+                    #packet probably was deleted and place released
                     self.output = open('/dev/null', 'r')
 
             if len(self.results):
@@ -287,7 +287,6 @@ class Job(Unpickable(err=nullobject,
             logging.debug("trying to terminate processes with pids: %s", ",".join(map(str, pids)))
             for pid in list(pids):
                 osspec.terminate(pid)
-        self.CloseStreams()
 
     def Result(self):
         return self.results[-1] if self.results else None
