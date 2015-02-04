@@ -431,7 +431,7 @@ class RemDaemon(object):
         self.timeWorker = None
 
     def process_backups(self):
-        sys.setrecursionlimit(20000)
+        sys.setrecursionlimit(10000)
         nextBackupTime = time.time() + self.scheduler.backupPeriod
         while self.scheduler.alive:
             if time.time() >= nextBackupTime:

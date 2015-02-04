@@ -198,6 +198,9 @@ class Job(Unpickable(err=nullobject,
                     self.packetRef.changeState(packet.PacketState.ERROR)
         except:
             logging.exception("some error during job finalization")
+            if self.packetRef.kill_all_jobs_on_error:
+                self.packetRef.Suspend(kill_jobs=True)
+                self.packetRef.changeState(packet.PacketState.ERROR)
 
     def Run(self, worker_trace_pids=None):
         self.alive = True

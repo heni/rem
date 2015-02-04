@@ -302,6 +302,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                     except Exception, e:
                         logging.exception("relocation FAIL : %s", e)
                         dstStorage = None
+            elif pck.directory and not os.path.isdir(pck.directory):
+                os.makedirs(pck.directory)
             else:
                 if pck.state != PacketState.SUCCESSFULL:
                     dstStorage = None
