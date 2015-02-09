@@ -121,6 +121,16 @@ class T02(unittest.TestCase):
         self.assertEqual(WaitForExecution(pckInfo), "ERROR")
         pckInfo.Delete()
 
+    def testExtendedDescription(self):
+        pckname = "descrtest-%d" % self.timestamp
+        pck = self.connector.Packet(pckname, self.timestamp, notify_emails=[self.notifyEmail])
+        j = pck.AddJob("exit $REM_JOB_DESCRIPTION", extended_description='1', tries=2)
+        self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
+        logging.info("packet %s(%s) added to queue %s, waiting until doing", pckname, pck.id, TestingQueue.Get())
+        pckInfo = self.connector.PacketInfo(pck)
+        self.assertEqual(WaitForExecution(pckInfo), "ERROR")
+        pckInfo.Delete()
+
     def testHugeOutput(self):
         pckname = "hugeout-%d" % self.timestamp
         pck = self.connector.Packet(pckname, self.timestamp, notify_emails=[self.notifyEmail])
