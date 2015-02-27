@@ -204,8 +204,6 @@ class REMService(Service):
     def __init__(self):
         self.Configure()
         interpreter = "python"
-        if 0 == subprocess.call(['which', 'python-stackless']):
-            interpreter = 'python-stackless'
         runArgs = [interpreter, "rem-server.py", "start"]
         if self.setupScript: runArgs = ["/bin/sh", "-c", " ".join([self.setupScript, "&&", "exec"] + runArgs)]
         if not os.path.isdir("var"): os.makedirs("var")
