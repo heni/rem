@@ -205,6 +205,7 @@ class Queue(Unpickable(pending=PackSet.create,
                     pck.changeState(PacketState.ERROR)
                 except:
                     logging.error("can't mark packet %s as errored")
+        self.FireEvent("task_pending")
 
     def Suspend(self):
         self.isSuspended = True
