@@ -25,6 +25,8 @@ class DuplicatePackageNameException(Exception):
 
 class AsyncXMLRPCServer(ThreadingMixIn, SimpleXMLRPCServer):
     def __init__(self, poolsize, *args, **kws):
+        if socket.has_ipv6:
+            self.address_family = socket.AF_INET6
         SimpleXMLRPCServer.__init__(self, *args, **kws)
         self.poolsize = poolsize
         self.requests = StdQueue.Queue(poolsize)
