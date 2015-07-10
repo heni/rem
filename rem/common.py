@@ -18,32 +18,20 @@ import heapq
 from heap import PriorityQueue
 import osspec
 
-def logged(log_args=False, level="debug"):
-    log_func = getattr(logging, level)
-    assert callable(log_func)
 
-    def inner(func):
-        def inner(*args, **kwargs):
-            if log_args:
-                prefix = 'function "%s(%s)" ' % (func.__name__, str((args, kwargs))[:100])
-            else:
-                prefix = 'function "%s" ' % func.__name__
+def logged(func):
+    def f(*args):
+        MAX_LEN = 100
+        argStr = str(args)
+        if len(argStr) > MAX_LEN:
+            argStr = argStr[:MAX_LEN]
+        logging.debug("function \"%s(%s)\" started", func.func_name, argStr)
+        res = func(*args)
+        logging.debug("function \"%s(%s)\" finished", func.func_name, argStr)
+        return res
 
-            def log(str):
-                log_func(prefix + str)
+    return f
 
-            log('started')
-            try:
-                ret = func(*args, **kwargs)
-            except Exception as e:
-                log('failed: %s' % e)
-                raise e
-            else:
-                log('finished')
-
-            return ret
-        return inner
-    return inner
 
 def traced_rpc_method(level="debug"):
     log_method = getattr(logging, level)
@@ -99,20 +87,6 @@ class ObjectRegistrator(object):
         logging.debug("summary deserialization objects size: %s(%s objects)\nmore huge objects: %s\nby types: %s",
                       self.sum_size, self.count, self.max_objects, self.tpCache)
 
-
-class ObjectRegistratorsChain(object):
-    __slots__ = ['registrators']
-
-    def __init__(self, registrators):
-        self.registrators = registrators
-
-    def register(self, obj, sdict):
-        for reg in self.registrators:
-            reg.register(obj, sdict)
-
-    def LogStats(self):
-        for reg in self.registrators:
-            reg.LogStats()
 
 ObjectRegistrator_ = FakeObjectRegistrator()
 #ObjectRegistrator_ = ObjectRegistrator()

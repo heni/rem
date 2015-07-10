@@ -7,11 +7,11 @@ import logging
 import os
 import re
 from collections import deque
+from cPickle import Pickler, Unpickler
 import gc
 import sys
 from threading import Condition
 from common import PickableStdQueue, PickableStdPriorityQueue
-import common
 from Queue import Empty
 
 from job import FuncJob, FuncRunner
@@ -208,14 +208,13 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def CheckUnsuccessfulBackupFilename(self, filename):
         return bool(self.UnsuccessfulBackupFilenameMatchRe.match(filename))
 
-    @common.logged()
-    def RollBackup(self, force=False):
+    def RollBackup(self):
         try:
             if not os.path.isdir(self.backupDirectory):
                 os.makedirs(self.backupDirectory)
             start_time = time.time()
             self.tagRef.tag_logger.Rotate()
-            if not self.backupable and not force:
+            if not self.backupable:
                 logging.warning("REM is currently not in backupable state; change it back to backupable as soon as possible")
                 return
             self.SaveData(os.path.join(self.backupDirectory, "sched-%.0f.dump" % time.time()))
@@ -224,8 +223,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             for filename in backupFiles[self.backupCount:] + unsuccessfulBackupFiles:
                 os.unlink(os.path.join(self.backupDirectory, filename))
             self.tagRef.tag_logger.Clear(start_time)
-        except:
-            raise
+        finally:
+            pass
 
     def SuspendBackups(self):
         self.backupable = False
@@ -233,8 +232,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def ResumeBackups(self):
         self.backupable = True
 
-    def Serialize(self, out):
-        import cPickle as pickle
+    def SaveData(self, filename):
+        gc.collect()
 
         sdict = {
             "qRef": copy.copy(self.qRef),
@@ -244,26 +243,11 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             "schedWatcher": self.schedWatcher,
             "connManager": self.connManager
         }
-
-        p = pickle.Pickler(out, 2)
-        p.dump(sdict)
-
-    def SaveData(self, filename):
-        from StringIO import StringIO
-
-        gc.collect()
-
         tmpFilename = filename + ".tmp"
-        with open(tmpFilename, "w") as out:
-            mem_out = StringIO()
-            try:
-                self.Serialize(mem_out)
-                out.write(mem_out.getvalue())
-            finally:
-                mem_out.close()
-
+        with open(tmpFilename, "w") as backup_printer:
+            pickler = Pickler(backup_printer, 2)
+            pickler.dump(sdict)
         os.rename(tmpFilename, filename)
-
         if self.context.useMemProfiler:
             try:
                 last_heap = self.LastHeap
@@ -278,47 +262,18 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         return nullobject, ()
 
     def Deserialize(self, stream):
-        import packet
-        import cPickle as pickle
-
-        class PacketsRegistrator(object):
-            __slots__ = ['packets']
-
-            def __init__(self):
-                self.packets = []
-
-            def register(self, obj, state):
-                if isinstance(obj, packet.JobPacket):
-                    self.packets.append(obj)
-
-            def LogStats(self):
-                pass
+        import common
 
         with self.lock:
-            packets_registrator = PacketsRegistrator()
-
-            common.ObjectRegistrator_ = ObjectRegistrator_ \
-                = common.ObjectRegistratorsChain([
-                    packets_registrator,
-                    self.ObjectRegistratorClass()
-                ])
-
-            unpickler = pickle.Unpickler(stream)
-
+            common.ObjectRegistrator_ = ObjectRegistrator_ = self.ObjectRegistratorClass()
+            unpickler = Unpickler(stream)
             sdict = unpickler.load()
             assert isinstance(sdict, dict)
-
             #update internal structures
             qRef = sdict.pop("qRef")
-
             DiscardKey(sdict, 'qList')
             self.__setstate__(sdict)
             self.UpdateContext(None)
-
-            tagStorage = self.tagRef
-            for pck in packets_registrator.packets:
-                pck.VivifyDoneTagsIfNeed(tagStorage)
-
             self.RegisterQueues(qRef)
             #output objects statistics
             ObjectRegistrator_.LogStats()
