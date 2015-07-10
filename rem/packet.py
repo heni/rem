@@ -10,7 +10,6 @@ from common import BinaryFile, PickableRLock, SendEmail, Unpickable, safeStringE
 from job import Job, PackedExecuteResult
 import osspec
 
-
 class PacketState(object):
     CREATED = "CREATED"                 #created only packet
     WORKABLE = "WORKABLE"               #working packet without pending jobs
@@ -119,6 +118,13 @@ class JobPacketImpl(object):
                 self.waitTags.remove(tagname)
             if len(self.waitTags) == 0 and self.state == PacketState.SUSPENDED:
                 self.Resume()
+
+    def VivifyDoneTagsIfNeed(self, tagStorage):
+        if isinstance(self.done_indicator, str):
+            self.done_indicator = tagStorage.AcquireTag(self.done_indicator)
+        for jid, cur_val in self.job_done_indicator.iteritems():
+            if isinstance(cur_val, str):
+                self.job_done_indicator[jid] = tagStorage.AcquireTag(cur_val)
 
     def UpdateTagDependencies(self, tagStorage):
         self.waitTags = tagset(self.waitTags)
@@ -294,6 +300,18 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.SetWaitingTags(wait_tags)
         self.done_indicator = set_tag
         self.kill_all_jobs_on_error = kill_all_jobs_on_error
+
+    def __getstate__(self):
+        sdict = CallbackHolder.__getstate__(self)
+
+        if sdict['done_indicator']:
+            sdict['done_indicator'] = sdict['done_indicator'].name
+
+        job_done_indicator = sdict['job_done_indicator'] = sdict['job_done_indicator'].copy()
+        for job_id, tag in job_done_indicator.iteritems():
+            job_done_indicator[job_id] = tag.name
+
+        return sdict
 
     def Init(self, context):
         logging.info("packet init: %r %s", self, self.state)

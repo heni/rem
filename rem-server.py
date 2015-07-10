@@ -13,6 +13,7 @@ from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from SocketServer import ThreadingMixIn
 import Queue as StdQueue
 import xmlrpclib
+import datetime
 
 from rem import *
 
@@ -343,11 +344,23 @@ def set_backupable_state(bckpFlag):
     else:
         _scheduler.SuspendBackups()
 
+@traced_rpc_method("warning")
+def do_backup():
+    t0 = time.time()
+    try:
+        logging.debug("rem-server\tbefore backup")
+        _scheduler.RollBackup(force=True)
+    except Exception, e:
+        logging.exception("rem-server\tbackup error : %s", e)
+    else:
+        logging.debug("rem-server\tafter backup")
+    return [time.time() - t0]
 
 class RemServer(object):
-    def __init__(self, port, poolsize, scheduler, readonly=False):
+    def __init__(self, port, poolsize, scheduler, allow_backup_method=False, readonly=False):
         self.scheduler = scheduler
         self.readonly = readonly
+        self.allow_backup_method = allow_backup_method
         self.rpcserver = AsyncXMLRPCServer(poolsize, ("", port), AuthRequestHandler, allow_none=True)
         self.rpcserver.register_multicall_functions()
         self.register_all_functions()
@@ -400,6 +413,8 @@ class RemServer(object):
         self.register_function(queue_set_success_lifetime, "queue_set_success_lifetime")
         self.register_function(queue_set_error_lifetime, "queue_set_error_lifetime")
         self.register_function(set_backupable_state, "set_backupable_state")
+        if self.allow_backup_method:
+            self.register_function(do_backup, "do_backup")
 
     def request_processor(self):
         rpc_fd = self.rpcserver.fileno()
@@ -425,24 +440,33 @@ class RemServer(object):
 class RemDaemon(object):
     def __init__(self, scheduler, context):
         self.scheduler = scheduler
-        self.api_servers = [RemServer(context.manager_port, context.xmlrpc_pool_size, scheduler)]
+        self.api_servers = [
+            RemServer(context.manager_port, context.xmlrpc_pool_size, scheduler,
+                      allow_backup_method=context.allow_backup_rpc_method)
+        ]
         if context.manager_readonly_port:
             self.api_servers.append(RemServer(context.manager_readonly_port,
-                                              context.readonly_xmlrpc_pool_size, scheduler, readonly=True))
+                                              context.readonly_xmlrpc_pool_size,
+                                              scheduler,
+                                              allow_backup_method=context.allow_backup_rpc_method,
+                                              readonly=True))
         self.regWorkers = []
         self.timeWorker = None
 
     def process_backups(self):
-        sys.setrecursionlimit(10000)
         nextBackupTime = time.time() + self.scheduler.backupPeriod
         while self.scheduler.alive:
             if time.time() >= nextBackupTime:
                 try:
                     self.scheduler.RollBackup()
-                except Exception, e:
-                    logging.exception("rem-server\tbackup error : %s", e)
-                finally:
-                    nextBackupTime = time.time() + self.scheduler.backupPeriod
+                except:
+                    pass
+
+                nextBackupTime = time.time() + self.scheduler.backupPeriod
+
+                logging.debug("rem-server\tnext backup time: %s" \
+                    % datetime.datetime.fromtimestamp(nextBackupTime).strftime('%H:%M'))
+
             time.sleep(max(self.scheduler.backupPeriod, 0.01))
 
     def signal_handler(self, signum, frame):
@@ -483,16 +507,22 @@ class RemDaemon(object):
         #register signal handlers
         osspec.reg_signal_handler(signal.SIGINT, self.signal_handler)
         osspec.reg_signal_handler(signal.SIGTERM, self.signal_handler)
+
         #start regular workers
         self.start_workers()
+
         #start xmlrpc server
         for server in self.api_servers:
             server.start()
             #main cycle for backups
+
+        logging.debug("rem-server\tall_started")
+
         self.process_backups()
         #final backup
         while not self.permitFinalBackup:
             time.sleep(0.01)
+
         self.scheduler.RollBackup()
 
 
@@ -508,7 +538,6 @@ def scheduler_test():
         for tagname, tagvalue in sc.tagRef.ListTags():
             if tagvalue: print "tag: [{0}]".format(tagname)
 
-    sys.setrecursionlimit(10000)
     print_tags(_scheduler)
     qname = "userdata"
     print list_queues()
