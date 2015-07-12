@@ -322,6 +322,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.RegisterQueues(qRef)
             #output objects statistics
             ObjectRegistrator_.LogStats()
+            common.ObjectRegistrator_ = FakeObjectRegistrator()
 
     def Restore(self):
         self.tagRef.Restore()
