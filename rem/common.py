@@ -37,7 +37,7 @@ def logged(log_args=False, level="debug"):
                 ret = func(*args, **kwargs)
             except Exception as e:
                 log('failed: %s' % e)
-                raise e
+                raise
             else:
                 log('finished')
 
