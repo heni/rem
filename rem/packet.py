@@ -62,12 +62,13 @@ class PCL_StateChange(object):
 
 
 class PacketCustomLogic(object):
-    from messages import GetHelperByPacketState, GetEmergencyHelper, GetLongExecutionWarningHelper
+    from messages import GetHelperByPacketState, GetEmergencyHelper, GetLongExecutionWarningHelper, GetResetNotificationHelper
 
     SchedCtx = None
     StateMessageHelper = staticmethod(GetHelperByPacketState)
     EmergencyMessageHelper = staticmethod(GetEmergencyHelper)
     LongExecutionWorkningHelper = staticmethod(GetLongExecutionWarningHelper)
+    ResetNotificationHelper = staticmethod(GetResetNotificationHelper)
 
     def __init__(self, pck):
         self.pck = pck
@@ -84,6 +85,11 @@ class PacketCustomLogic(object):
         logging.error("incorrect state for \"Get\" operation: %s, packet %s will be markered for delete",
                       self.pck.state, self.pck.name)
         msgHelper = self.EmergencyMessageHelper(self.pck, self.SchedCtx)
+        if msgHelper:
+            SendEmail(self.pck.notify_emails, msgHelper)
+
+    def DoResetNotification(self, message):
+        msgHelper = self.ResetNotificationHelper(self.pck, self.SchedCtx, message)
         if msgHelper:
             SendEmail(self.pck.notify_emails, msgHelper)
 
@@ -282,13 +288,14 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                            history=(list, []),
                            notify_emails=(list, []),
                            flags=int,
-                           kill_all_jobs_on_error=(bool, True)),
+                           kill_all_jobs_on_error=(bool, True),
+                           isResetable=(bool, True)),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
     INCORRECT = -1
 
-    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True):
+    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True, isResetable=True):
         super(JobPacket, self).__init__()
         self.name = name
         self.state = PacketState.NONINITIALIZED
@@ -300,6 +307,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.SetWaitingTags(wait_tags)
         self.done_indicator = set_tag
         self.kill_all_jobs_on_error = kill_all_jobs_on_error
+        self.isResetable = isResetable
 
     def __getstate__(self):
         sdict = CallbackHolder.__getstate__(self)
@@ -644,16 +652,20 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             job.results = []
         self.Resume()
 
-    def OnReset(self, ref):
+    def OnReset(self, (ref, message)):
         if isinstance(ref, Tag):
-            if self.state == PacketState.SUCCESSFULL and self.done_indicator:
-                self.done_indicator.Reset()
-            for job_id in list(self.done):
-                tag = self.job_done_indicator.get(job_id)
-                if tag:
-                    tag.Reset()
             self.waitTags.add(ref.GetFullname())
-            self.Reset()
+            if self.isResetable:
+                if self.state == PacketState.SUCCESSFULL and self.done_indicator:
+                    self.done_indicator.Reset(message)
+                for job_id in list(self.done):
+                    tag = self.job_done_indicator.get(job_id)
+                    if tag:
+                        tag.Reset(message)
+                self.Reset()
+            else:
+                if self.state == PacketState.SUCCESSFULL:
+                    PacketCustomLogic(self).DoResetNotification(message)
 
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in

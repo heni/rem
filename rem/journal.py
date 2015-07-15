@@ -27,9 +27,13 @@ class UnsetTagEvent(TagEvent):
         tag_logger.tagRef.UnsetTag(self.tagname)
 
 
-class ResetTagEvent(TagEvent):
+class ResetTagEvent(TagEvent, Unpickable(message=str)):
+    def __init__(self, tagname, message):
+        super(ResetTagEvent, self).__init__(tagname)
+        self.message = message
+
     def Redo(self, tag_logger):
-        tag_logger.tagRef.ResetTag(self.tagname)
+        tag_logger.tagRef.ResetTag(self.tagname, self.message)
 
 
 class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
@@ -76,8 +80,8 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
     def OnUndone(self, tag):
         self.LogEvent(UnsetTagEvent, tag.GetFullname())
 
-    def OnReset(self, tag):
-        self.LogEvent(ResetTagEvent, tag.GetFullname())
+    def OnReset(self, (tag, message)):
+        self.LogEvent(ResetTagEvent, tag.GetFullname(), message)
 
     def Restore(self):
         logging.debug("TagLogger.Restore")

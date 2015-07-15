@@ -228,13 +228,13 @@ class JobPacket(object):
     """прокси объект для создания пакетов задач REM"""
     DEFAULT_TRIES_COUNT = 5
 
-    def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness=False,
+    def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness, resetable,
                  kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_DUPLICATE_NAMES_POLICY):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
             raise RuntimeError("result tag %s already set for packet %s" % (set_tag, name))
-        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, packet_name_policy)
+        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, packet_name_policy, resetable)
 
     def AddJob(self, shell, parents=None, pipe_parents=None, set_tag=None, tries=DEFAULT_TRIES_COUNT, files=None, \
                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=NOTIFICATION_TIMEOUT, max_working_time=KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
@@ -540,9 +540,11 @@ class Tag(object):
         """сбрасывает тэг"""
         return self.proxy.unset_tag(self.name)
 
-    def Reset(self):
+    def Reset(self, message=""):
         """сброс тэга и остановка всех зависящих от него пакетов"""
-        return self.proxy.reset_tag(self.name)
+        if not message:
+            logging.warning("Reset without useful reason is deprecated")
+        return self.proxy.reset_tag(self.name, message)
 
     def ListDependentPackets(self):
         """список id пакетов, которые будут запущены при установке данного тэга"""
@@ -627,16 +629,17 @@ class Connector(object):
         return Queue(self, qname)
 
     def Packet(self, pckname, priority=MAX_PRIORITY, notify_emails=[], wait_tags=(), set_tag=None,
-               check_tag_uniqueness=False, kill_all_jobs_on_error=True):
+               check_tag_uniqueness=False, resetable=True, kill_all_jobs_on_error=True):
         """создает новый пакет с именем pckname
             priority - приоритет выполнения пакета
             notify_emails - список почтовых адресов, для уведомления об ошибках
             wait_tags - список тэгов, установка которых является необходимым условием для начала выполнения пакета
             set_tag - тэг, устанавливаемый по завершении работы пакеты
-            kill_all_jobs_on_error - при неудачном завершении задания остальные задания прекращают работу.
+            kill_all_jobs_on_error - при неудачном завершении задания остальные задания прекращают работу
+            resetable - флаг, контролирующий возможность трансляции через пакет цепочки Reset'ов (по умолчанию - True)
         возвращает объект класса JobPacket"""
         try:
-            return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness,
+            return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness, resetable,
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
         except xmlrpclib.Fault, e:
             if 'DuplicatePackageNameException' in e.faultString:

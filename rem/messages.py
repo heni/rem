@@ -30,6 +30,11 @@ def GetLongExecutionWarningHelper(job, ctx):
         return TooLongWorkingWarning(job, ctx)
 
 
+def GetResetNotificationHelper(pck, ctx, message):
+    if ctx:
+        return ResetNotification(pck, ctx, message)
+
+
 class PacketExecutionError(IMessageHelper):
     def __init__(self, pck, ctx):
         self.pck = pck
@@ -152,6 +157,26 @@ class TooLongWorkingWarning(IMessageHelper):
             print >> mbuf, "\n".join("\t%s: %s" % (k, v) for k, v in job.iteritems() if k != "results")
             if job.get("results"):
                 print >> mbuf, "\n".join("\tresult: %s" % v for v in job.get("results"))
+        return mbuf.getvalue()
+
+
+class ResetNotification(IMessageHelper):
+    def __init__(self, pck, ctx, message):
+        self.pck = pck
+        self.ctx = ctx
+        self.reason = message
+
+    def subject(self):
+        return "[REM@%(sname)s] packet '%(pname)s' need to be reseted" \
+            % {"pname": self.pck.name, "sname": self.ctx.network_name}
+
+    def message(self):
+        mbuf = cStringIO.StringIO()
+        print >>mbuf, "system reset detected; may be your packet '%(pname)s' need to reset" % {"pname": self.pck.name}
+        if not self.pck.isResetable:
+            print >>mbuf, "message was sent because your packet doesn't allow automatical resets"
+        print >>mbuf, "packet id:", self.pck.id
+        print >>mbuf, "reset reason:", self.reason
         return mbuf.getvalue()
 
 

@@ -5,7 +5,6 @@ import os
 import re
 import select
 import signal
-import sys
 import socket
 import time
 import threading
@@ -15,7 +14,9 @@ import Queue as StdQueue
 import xmlrpclib
 import datetime
 
-from rem import *
+from rem import constants, osspec
+from rem import traced_rpc_method
+from rem import CheckEmailAddress, DefaultContext, JobPacket, PacketState, Scheduler, ThreadJobWorker, TimeTicker, XMLRPCWorker
 
 class DuplicatePackageNameException(Exception):
     def __init__(self, pck_name, serv_name, *args, **kwargs):
@@ -83,7 +84,7 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY, resetable=True):
     if packet_name_policy & constants.DENY_DUPLICATE_NAMES_POLICY and _scheduler.packetNamesTracker.Exist(packet_name):
         ex = DuplicatePackageNameException(packet_name, _context.network_name)
         raise xmlrpclib.Fault(1, ex.message)
@@ -94,7 +95,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     wait_tags = [_scheduler.tagRef.AcquireTag(tagname) for tagname in wait_tagnames]
     pck = JobPacket(packet_name, priority, _context, notify_emails,
                     wait_tags=wait_tags, set_tag=_scheduler.tagRef.AcquireTag(set_tag),
-                    kill_all_jobs_on_error=kill_all_jobs_on_error)
+                    kill_all_jobs_on_error=kill_all_jobs_on_error, isResetable=resetable)
     _scheduler.RegisterNewPacket(pck, wait_tags)
     logging.info('packet %s registered as %s', packet_name, pck.id)
     return pck.id
@@ -155,9 +156,9 @@ def unset_tag(tagname):
 
 
 @traced_rpc_method()
-def reset_tag(tagname):
+def reset_tag(tagname, message=""):
     tag = _scheduler.tagRef.AcquireTag(tagname)
-    tag.Reset()
+    tag.Reset(message)
 
 
 @readonly_method
