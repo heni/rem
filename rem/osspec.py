@@ -1,5 +1,5 @@
 #OS specific functions
-#FreeBSD implementation
+#Linux/FreeBSD implementation
 from __future__ import with_statement
 import logging
 import os
