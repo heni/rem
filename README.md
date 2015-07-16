@@ -3,8 +3,6 @@ Robust Execute Manager project
 
 Maintainers:  
 * Eugene Krokhalev (ekrokhalev@yandex-team.ru)
-* Yuliy Ayvazyan (yuliy@yandex-team.ru) 
-* Kostiantyn Snihyr (lexplua@yandex-team.ru)
 * Kirill Trofimenkov (trofimenkov@yandex-team.ru)
  
 
