@@ -10,6 +10,7 @@ Authors:
     Yuliy Ayavazyan
     Eugene Krokhalev
     Artem Volkhin
+    Kostiantyn Snihyr
     Kirill Trofimenkov
 ~~~
 
