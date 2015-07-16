@@ -55,6 +55,8 @@ class Queue(Unpickable(pending=PackSet.create,
     def OnJobDone(self, ref):
         with self.lock:
             self.working.discard(ref)
+        if self.HasStartableJobs():
+            self.FireEvent("task_pending")
 
     def OnChange(self, ref):
         if isinstance(ref, JobPacket):
@@ -95,6 +97,13 @@ class Queue(Unpickable(pending=PackSet.create,
                 with self.lock: src_queue.remove(pck)
             if dest_queue is not None:
                 with self.lock: dest_queue.add(pck)
+            if pck.state == PacketState.PENDING:
+                self.FireEvent("task_pending")
+            if pck.state == PacketState.NONINITIALIZED:
+                self.FireEvent("packet_noninitialized")
+
+    def OnPendingPacket(self, ref):
+        self.FireEvent("task_pending")
 
     def IsAlive(self):
         return not self.isSuspended
@@ -119,8 +128,15 @@ class Queue(Unpickable(pending=PackSet.create,
             self.working.difference_update(pck.GetWorkingJobs())
         self.movePacket(pck, None)
 
-    def HasStartableJobs(self):
-        return self.pending and len(self.working) < self.workingLimit
+
+    def _CheckStartableJobs(self):
+        return self.pending and len(self.working) < self.workingLimit and self.IsAlive()
+
+    def HasStartableJobs(self, block=True):
+        if block:
+            with self.lock:
+                return self._CheckStartableJobs()
+        return self._CheckStartableJobs()
 
     def RestoreNoninitialized(self, pck, context):
         pck.Init(context)
@@ -128,21 +144,16 @@ class Queue(Unpickable(pending=PackSet.create,
 
     def ScheduleNonitializedRestoring(self, context):
         with self.lock:
-            while len(self.noninitialized) != 0:
+            while self.noninitialized:
                 pck = self.noninitialized.pop()
                 context.Scheduler.ScheduleTask(0, self.RestoreNoninitialized, pck, context)
 
     def Get(self, context):
-        DELAY = 5
-        if self.noninitialized:
-            self.ScheduleNonitializedRestoring(context)
         pckIncorrect = None
         while True:
-            if not self.HasStartableJobs():
-                return
             with self.lock:
-                if not self.HasStartableJobs():
-                    return
+                if not self.HasStartableJobs(False):
+                    return None
                 pck, prior = self.pending.peak()
                 pendingJob = pck.Get()
                 if pendingJob == JobPacket.INCORRECT:
@@ -150,12 +161,11 @@ class Queue(Unpickable(pending=PackSet.create,
                     if pck == pckIncorrect:
                         PacketCustomLogic(pck).DoEmergencyAction()
                         self.pending.pop()
-                        return
+                        return None
                     else:
                         pckIncorrect = pck
                 else:
                     return pendingJob
-            time.sleep(DELAY)
 
     def ListAllPackets(self):
         return itertools.chain(*(getattr(self, q) for q in self.VIEW_BY_ORDER))
@@ -195,6 +205,7 @@ class Queue(Unpickable(pending=PackSet.create,
                     pck.changeState(PacketState.ERROR)
                 except:
                     logging.error("can't mark packet %s as errored")
+        self.FireEvent("task_pending")
 
     def Suspend(self):
         self.isSuspended = True
@@ -203,11 +214,13 @@ class Queue(Unpickable(pending=PackSet.create,
         return {"alive": self.IsAlive(), "pending": len(self.pending), "suspended": len(self.suspended),
                 "errored": len(self.errored), "worked": len(self.worked),
                 "waiting": len(self.waited), "working": len(self.working), "working-limit": self.workingLimit, 
-                "success-lifetime": self.success_lifetime if self.success_lifetime >= 0 else self.successForgetTm, 
-                "error-lifetime": self.errored_lifetime if self.errored_lifetime >= 0 else self.errorForgetTm}
+                "success-lifetime": self.success_lifetime if self.success_lifetime > 0 else self.successForgetTm,
+                "error-lifetime": self.errored_lifetime if self.errored_lifetime > 0 else self.errorForgetTm}
 
     def ChangeWorkingLimit(self, lmtValue):
         self.workingLimit = int(lmtValue)
+        if self._CheckStartableJobs:
+            self.FireEvent('task_pending')
 
     def Empty(self):
         return not any(getattr(self, subq_name, None) for subq_name in self.VIEW_BY_ORDER)

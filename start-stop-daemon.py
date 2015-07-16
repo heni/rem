@@ -6,6 +6,7 @@ import sys
 import optparse
 import signal
 import time
+import subprocess
 
 
 INFINITY = float('inf')
@@ -202,7 +203,8 @@ class Service(object):
 class REMService(Service):
     def __init__(self):
         self.Configure()
-        runArgs = ["python", "rem-server.py", "start"]
+        interpreter = "python"
+        runArgs = [interpreter, "rem-server.py", "start"]
         if self.setupScript: runArgs = ["/bin/sh", "-c", " ".join([self.setupScript, "&&", "exec"] + runArgs)]
         if not os.path.isdir("var"): os.makedirs("var")
         super(REMService, self).__init__(

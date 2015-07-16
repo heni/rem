@@ -201,6 +201,9 @@ class Job(Unpickable(err=nullobject,
                     self.packetRef.changeState(packet.PacketState.ERROR)
         except:
             logging.exception("some error during job finalization")
+            if self.packetRef.kill_all_jobs_on_error:
+                self.packetRef.Suspend(kill_jobs=True)
+                self.packetRef.changeState(packet.PacketState.ERROR)
 
     def Run(self, worker_trace_pids=None):
         self.alive = True
@@ -259,8 +262,13 @@ class Job(Unpickable(err=nullobject,
             if not self.output.closed:
                 self.output.close()
             if self.output.closed:
-                self.output = open(self.output.name, 'r')
-            if len(self.results) :
+                try:
+                    self.output = open(self.output.name, 'r')
+                except IOError:
+                    #packet probably was deleted and place released
+                    self.output = open('/dev/null', 'r')
+
+            if len(self.results):
                 self.results[-1].message = self.results[-1].message or ""
                 self.results[-1].message += '\nOutput:\n'
                 self.results[-1].message += '-'*80

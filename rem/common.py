@@ -11,6 +11,9 @@ import time
 import types
 import re
 import xmlrpclib
+from Queue import Queue as StdQueue
+from Queue import PriorityQueue as StdPriorityQueue
+import heapq
 
 from heap import PriorityQueue
 import osspec
@@ -291,6 +294,60 @@ class TimedMap(PriorityQueue):
         return self.pop(obj)
 
 
+class PickableStdPriorityQueue(Unpickable(_object=StdPriorityQueue)):
+    @classmethod
+    def create(cls, dct=None):
+        if not dct: dct = {}
+        obj = cls()
+        if isinstance(dct, cls):
+            for key, value in dct.__dict__.iteritems():
+                if key != "_object":
+                    obj.put((key, value))
+            return obj
+
+        if isinstance(dct, PriorityQueue):
+            for value, key in zip(dct.__dict__['objects'], dct.__dict__['values']):
+                obj.put((key, value))
+            return obj
+        for key, value in dct.iteritems():
+            obj.put((key, value))
+        return obj
+
+    def __getattr__(self, attrname):
+        return getattr(self._object, attrname)
+
+    def __getstate__(self):
+        return dict(copy.copy(self.queue))
+
+    def peak(self):
+        return self._object.queue[0]
+
+
+class PickableStdQueue(Unpickable(_object=StdQueue)):
+    @classmethod
+    def create(cls, dct=None):
+        if not dct: dct = {}
+        obj = cls()
+        if isinstance(dct, list):
+            for item in dct:
+                obj.put(item)
+            return obj
+        if isinstance(dct, cls):
+            for item in getattr(dct, 'queue', ()):
+                obj.put(item)
+            return obj
+        return obj
+
+    def __getattr__(self, attrname):
+        return getattr(self._object, attrname)
+
+    def __getstate__(self):
+        sdict = dict()
+        sdict['queue'] = copy.copy(self._object.__dict__['queue'])
+        return sdict
+
+
+
 def GeneralizedSet(priorAttr):
     class _packset(PriorityQueue):
         @classmethod
@@ -440,3 +497,8 @@ def CheckEmailAddress(email):
 def SendEmail(emails, msg_helper):
     if msg_helper:
         return osspec.send_email(emails, msg_helper.subject(), msg_helper.message())
+
+
+def DiscardKey(d, key):
+    if key in d:
+        del d[key]

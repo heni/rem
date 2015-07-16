@@ -38,7 +38,7 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
             if isinstance(obj(), ICallbackAcceptor):
                 obj().AcceptCallback(reference or self, event)
             else:
-                logging.warning("callback %r\tincorrect acceptor found: %s", self, obj())
+                logging.warning("callback %r\tincorrect acceptor for %s found: %s", self, event, obj())
                 bad_listeners.add(obj())
         for obj in bad_listeners:
             self.DropCallbackListener(obj)
@@ -48,10 +48,11 @@ class CallbackHolder(Unpickable(callbacks=weakref.WeakKeyDictionary,
 
     def __getstate__(self):
         sdict = self.__dict__.copy()
-        callbacks = dict(sdict.pop("callbacks"))
-        if callbacks:
-            sdict["callbacks"] = callbacks
+        callbacks = sdict.pop("callbacks")
+        sdict['callbacks'] = {}
         del sdict["nonpersistent_callbacks"]
+        for k,v in callbacks.iteritems():
+            sdict['callbacks'][k] = v
         return sdict
 
 

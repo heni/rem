@@ -1,6 +1,7 @@
 from __future__ import with_statement
 import copy
 import shutil
+import threading
 import time
 import logging
 import os
@@ -8,31 +9,39 @@ import re
 from collections import deque
 from cPickle import Pickler, Unpickler
 import gc
+import sys
+from threading import Condition
+from common import PickableStdQueue, PickableStdPriorityQueue
+from Queue import Empty
 
 from job import FuncJob, FuncRunner
-from common import Unpickable, TimedSet, PickableLock, FakeObjectRegistrator, ObjectRegistrator, nullobject
+from common import Unpickable, TimedSet, PickableLock, FakeObjectRegistrator, ObjectRegistrator, nullobject, DiscardKey
 from rem import PacketCustomLogic
 from connmanager import ConnectionManager
 from packet import JobPacket, PacketState, PacketFlag
 from queue import Queue
 from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage, MessageStorage
-from callbacks import ICallbackAcceptor
+from callbacks import ICallbackAcceptor, CallbackHolder
 
 
-class SchedWatcher(Unpickable(tasks=TimedSet.create,
+
+class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
                               lock=PickableLock.create,
-                              workingQueue=list
+                              workingQueue=PickableStdQueue.create
                             ),
-                   ICallbackAcceptor):
+                   ICallbackAcceptor,
+                   CallbackHolder):
     def OnTick(self, ref):
         tm = time.time()
-        while len(self.tasks) > 0:
-            runner, runtm = self.tasks.peak()
-            if runtm > tm: break
+        while not self.tasks.empty():
             with self.lock:
-                if self.tasks.peak()[1] > tm: break
-                runner, runtm = self.tasks.pop()
-                self.workingQueue.append(runner)
+                runtm, runner = self.tasks.peak()
+                if runtm > tm:
+                    break
+                else:
+                    self.tasks.get()
+                    self.workingQueue.put(runner)
+                    self.FireEvent("task_pending")
 
     def AddTask(self, runtm, fn, *args, **kws):
         if "skip_logging" in kws:
@@ -41,29 +50,42 @@ class SchedWatcher(Unpickable(tasks=TimedSet.create,
             skipLoggingFlag = False
         if not skipLoggingFlag:
             logging.debug("new task %r scheduled on %s", fn, time.ctime(time.time() + runtm))
-        with self.lock:
-            self.tasks.add(FuncRunner(fn, args, kws), runtm + time.time())
+        self.tasks.put((runtm + time.time(), (FuncRunner(fn, args, kws))))
 
     def GetTask(self):
-        if self.workingQueue:
-            with self.lock:
-                if self.workingQueue:
-                    return self.workingQueue.pop(0)
+        if not self.workingQueue.empty():
+            try:
+                return self.workingQueue.get_nowait()
+            except Empty:
+                logging.warning("Try to take task from emty SchedWatcher`s queue")
+                return None
+            except Exception:
+                logging.exception("Some exception when SchedWatcher try take task")
+                return None
+
+    def HasStartableJobs(self):
+        return not self.workingQueue.empty()
+
+    def Empty(self):
+        return not self.HasStartableJobs()
+
+    def UpdateContext(self, context):
+        self.AddNonpersistentCallbackListener(context.Scheduler)
 
     def ListTasks(self):
-        task_lst = [(str(o), tm) for o, tm in self.tasks.items()]
-        task_lst += [(str(o), None) for o, tm in self.workingQueue]
+        task_lst = [(str(o), tm) for o, tm in self.tasks.queue]
+        task_lst += [(str(o), None) for o, tm in self.workingQueue.queue]
         return task_lst
 
     def __getstate__(self):
         sdict = self.__dict__.copy()
-        sdict["tasks"] = sdict["tasks"].copy()
         return getattr(super(SchedWatcher, self), "__getstate__", lambda: sdict)()
 
 
 class Scheduler(Unpickable(lock=PickableLock.create,
                            qList=deque, #list of all known queue
                            qRef=dict, #inversed qList for searching queues by name
+                           in_deque=dict,
                            tagRef=TagStorage, #inversed taglist for searhing tags by name
                            alive=(bool, False),
                            backupable=(bool, True),
@@ -97,6 +119,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.tagRef.UpdateContext(self.context)
         PacketCustomLogic.UpdateContext(self.context)
         self.connManager.UpdateContext(self.context)
+        self.HasScheduledTask = threading.Condition(self.lock)
+        self.schedWatcher.UpdateContext(self.context)
 
     def OnWaitingStart(self, ref):
         if isinstance(ref, JobPacket):
@@ -130,25 +154,53 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         if not create:
             raise KeyError("Queue '%s' doesn't exist" % qname)
         with self.lock:
-            q = self.qRef[qname] = Queue(qname)
-            q.UpdateContext(self.context)
-            q.AddCallbackListener(self)
-            self.qList.append(q)
+            q = Queue(qname)
+            self.RegisterQueue(q)
             return q
 
     def Get(self):
-        schedRunner = self.schedWatcher.GetTask()
-        if schedRunner:
-            return FuncJob(schedRunner)
-        for _ in xrange(len(self.qList)):
-            try:
-                q = self.qList[0]
-                if q and q.IsAlive():
-                    job = q.Get(self.context)
-                    if job:
-                        return job
-            finally:
-                self.qList.rotate(-1)
+        with self.lock:
+            while self.alive and not self.qList and self.schedWatcher.Empty():
+                self.HasScheduledTask.wait()
+
+            if self.alive:
+                if not self.schedWatcher.Empty():
+                    schedRunner = self.schedWatcher.GetTask()
+                    if schedRunner:
+                        return FuncJob(schedRunner)
+
+                if self.qList:
+                    qname = self.qList.popleft()
+                    if isinstance(qname, Queue):
+                        qname = qname.name
+                    self.in_deque[qname] = False
+                    job = self.qRef[qname].Get(self.context)
+                    if self.qRef[qname].HasStartableJobs():
+                        self.qList.append(qname)
+                        self.in_deque[qname] = True
+                        self.HasScheduledTask.notify()
+                    return job
+
+                logging.warning("No tasks for execution after condition waking up")
+
+    def Notify(self, ref):
+        if isinstance(ref, Queue):
+            queue = ref
+            if not queue.HasStartableJobs():
+                return
+            with self.lock:
+                if queue.HasStartableJobs():
+                    if not self.in_deque.get(queue.name, False):
+                        self.qList.append(queue.name)
+                        self.in_deque[queue.name] = True
+                        self.HasScheduledTask.notify()
+        elif isinstance(ref, SchedWatcher):
+            if ref.Empty():
+                return
+            with self.lock:
+                if not ref.Empty():
+                    self.HasScheduledTask.notify()
+
 
     def CheckBackupFilename(self, filename):
         return bool(self.BackupFilenameMatchRe.match(filename))
@@ -182,13 +234,15 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def SaveData(self, filename):
         gc.collect()
-        sdict = {"qList": copy.copy(self.qList),
-                 "qRef": copy.copy(self.qRef),
-                 "tagRef": self.tagRef,
-                 "binStorage": self.binStorage,
-                 "tempStorage": self.tempStorage,
-                 "schedWatcher": self.schedWatcher,
-                 "connManager": self.connManager}
+
+        sdict = {
+            "qRef": copy.copy(self.qRef),
+            "tagRef": self.tagRef,
+            "binStorage": self.binStorage,
+            "tempStorage": self.tempStorage,
+            "schedWatcher": self.schedWatcher,
+            "connManager": self.connManager
+        }
         tmpFilename = filename + ".tmp"
         with open(tmpFilename, "w") as backup_printer:
             pickler = Pickler(backup_printer, 2)
@@ -217,6 +271,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             assert isinstance(sdict, dict)
             #update internal structures
             qRef = sdict.pop("qRef")
+            DiscardKey(sdict, 'qList')
             self.__setstate__(sdict)
             self.UpdateContext(None)
             self.RegisterQueues(qRef)
@@ -227,43 +282,53 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.tagRef.Restore()
 
     def RegisterQueues(self, qRef):
-        for qname, q in qRef.iteritems():
-            q.UpdateContext(self.context)
-            q.AddCallbackListener(self)
-            for pck in list(q.ListAllPackets()):
-                dstStorage = self.packStorage
-                pck.UpdateTagDependencies(self.tagRef)
-                if pck.directory and os.path.isdir(pck.directory):
-                    parentDir, dirname = os.path.split(pck.directory)
-                    if parentDir != self.context.packets_directory:
-                        dst_loc = os.path.join(self.context.packets_directory, pck.id)
-                        try:
-                            logging.warning("relocates directory %s to %s", pck.directory, dst_loc)
-                            shutil.copytree(pck.directory, dst_loc)
-                            pck.directory = dst_loc
-                        except Exception, e:
-                            logging.exception("relocation FAIL : %s", e)
-                            dstStorage = None
-                else:
-                    if pck.state != PacketState.SUCCESSFULL:
+        for q in qRef.itervalues():
+            self.RegisterQueue(q)
+
+    def RegisterQueue(self, q):
+        q.UpdateContext(self.context)
+        q.AddCallbackListener(self)
+        for pck in list(q.ListAllPackets()):
+            dstStorage = self.packStorage
+            pck.UpdateTagDependencies(self.tagRef)
+            if pck.directory and os.path.isdir(pck.directory):
+                parentDir, dirname = os.path.split(pck.directory)
+                if parentDir != self.context.packets_directory:
+                    dst_loc = os.path.join(self.context.packets_directory, pck.id)
+                    try:
+                        logging.warning("relocates directory %s to %s", pck.directory, dst_loc)
+                        shutil.copytree(pck.directory, dst_loc)
+                        pck.directory = dst_loc
+                    except Exception, e:
+                        logging.exception("relocation FAIL : %s", e)
                         dstStorage = None
-                if dstStorage is None:
-                    #do not print about already errored packets
-                    if not pck.CheckFlag(PacketFlag.RCVR_ERROR):
-                        logging.warning(
-                            "can't restore packet directory: %s for packet %s. Packet marked as error from old state %s",
-                            pck.directory, pck.name, pck.state)
-                        pck.SetFlag(PacketFlag.RCVR_ERROR)
-                        pck.changeState(PacketState.ERROR)
-                    dstStorage = self.packStorage
-                dstStorage.Add(pck)
-                if pck.state != PacketState.HISTORIED:
-                    self.packetNamesTracker.Add(pck.name)
-                    pck.AddCallbackListener(self.packetNamesTracker)
-                q.relocatePacket(pck)
-            if q.IsAlive():
-                q.Resume(resumeWorkable=True)
-            self.qRef[qname] = q
+            elif pck.directory and not os.path.isdir(pck.directory):
+                os.makedirs(pck.directory)
+            else:
+                if pck.state != PacketState.SUCCESSFULL:
+                    dstStorage = None
+            if dstStorage is None:
+                #do not print about already errored packets
+                if not pck.CheckFlag(PacketFlag.RCVR_ERROR):
+                    logging.warning(
+                        "can't restore packet directory: %s for packet %s. Packet marked as error from old state %s",
+                        pck.directory, pck.name, pck.state)
+                    pck.SetFlag(PacketFlag.RCVR_ERROR)
+                    pck.changeState(PacketState.ERROR)
+                dstStorage = self.packStorage
+            dstStorage.Add(pck)
+            if pck.state != PacketState.HISTORIED:
+                self.packetNamesTracker.Add(pck.name)
+                pck.AddCallbackListener(self.packetNamesTracker)
+            q.relocatePacket(pck)
+        if q.IsAlive():
+            q.Resume(resumeWorkable=True)
+        self.qRef[q.name] = q
+        if q.HasStartableJobs():
+            self.qList.append(q)
+            self.in_deque[q.name] = True
+        else:
+            self.in_deque[q.name] = False
 
     def AddPacketToQueue(self, qname, pck):
         queue = self.Queue(qname)
@@ -284,14 +349,23 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.schedWatcher.AddTask(runtm, fn, *args, **kws)
 
     def Start(self):
-        self.alive = True
+        with self.lock:
+            self.alive = True
+            self.HasScheduledTask.notify_all()
         self.connManager.Start()
 
     def Stop(self):
-        self.alive = False
         self.connManager.Stop()
+        with self.lock:
+            self.alive = False
+            self.HasScheduledTask.notify_all()
 
     def GetConnectionManager(self):
         return self.connManager
 
-
+    def OnTaskPending(self, ref):
+        self.Notify(ref)
+    
+    def OnPacketNoninitialized(self, ref):
+        if ref.noninitialized:
+            ref.ScheduleNonitializedRestoring(self.context)
