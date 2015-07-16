@@ -5,7 +5,6 @@ import os
 import re
 import select
 import signal
-import sys
 import socket
 import time
 import threading
@@ -13,8 +12,11 @@ from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from SocketServer import ThreadingMixIn
 import Queue as StdQueue
 import xmlrpclib
+import datetime
 
-from rem import *
+from rem import constants, osspec
+from rem import traced_rpc_method
+from rem import CheckEmailAddress, DefaultContext, JobPacket, PacketState, Scheduler, ThreadJobWorker, TimeTicker, XMLRPCWorker
 
 class DuplicatePackageNameException(Exception):
     def __init__(self, pck_name, serv_name, *args, **kwargs):
@@ -82,7 +84,7 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY, resetable=True):
     if packet_name_policy & constants.DENY_DUPLICATE_NAMES_POLICY and _scheduler.packetNamesTracker.Exist(packet_name):
         ex = DuplicatePackageNameException(packet_name, _context.network_name)
         raise xmlrpclib.Fault(1, ex.message)
@@ -93,7 +95,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     wait_tags = [_scheduler.tagRef.AcquireTag(tagname) for tagname in wait_tagnames]
     pck = JobPacket(packet_name, priority, _context, notify_emails,
                     wait_tags=wait_tags, set_tag=_scheduler.tagRef.AcquireTag(set_tag),
-                    kill_all_jobs_on_error=kill_all_jobs_on_error)
+                    kill_all_jobs_on_error=kill_all_jobs_on_error, isResetable=resetable)
     _scheduler.RegisterNewPacket(pck, wait_tags)
     logging.info('packet %s registered as %s', packet_name, pck.id)
     return pck.id
@@ -101,15 +103,13 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
 
 @traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
-                max_err_len=None, retry_delay=None, pipe_fail=False, description="", extended_description="",
-                notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
+                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
         parents = [pck.jobs[int(jid)] for jid in parents]
         pipe_parents = [pck.jobs[int(jid)] for jid in pipe_parents]
-        job = pck.Add(shell, parents, pipe_parents, _scheduler.tagRef.AcquireTag(set_tag), tries,
-                      max_err_len, retry_delay, pipe_fail, description, extended_description,
-                      notify_timeout, max_working_time, output_to_status)
+        job = pck.Add(shell, parents, pipe_parents, _scheduler.tagRef.AcquireTag(set_tag), tries, \
+                      max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time, output_to_status)
         return str(job.id)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
@@ -156,9 +156,9 @@ def unset_tag(tagname):
 
 
 @traced_rpc_method()
-def reset_tag(tagname):
+def reset_tag(tagname, message=""):
     tag = _scheduler.tagRef.AcquireTag(tagname)
-    tag.Reset()
+    tag.Reset(message)
 
 
 @readonly_method
@@ -345,11 +345,23 @@ def set_backupable_state(bckpFlag):
     else:
         _scheduler.SuspendBackups()
 
+@traced_rpc_method("warning")
+def do_backup():
+    t0 = time.time()
+    try:
+        logging.debug("rem-server\tbefore backup")
+        _scheduler.RollBackup(force=True)
+    except Exception, e:
+        logging.exception("rem-server\tbackup error : %s", e)
+    else:
+        logging.debug("rem-server\tafter backup")
+    return [time.time() - t0]
 
 class RemServer(object):
-    def __init__(self, port, poolsize, scheduler, readonly=False):
+    def __init__(self, port, poolsize, scheduler, allow_backup_method=False, readonly=False):
         self.scheduler = scheduler
         self.readonly = readonly
+        self.allow_backup_method = allow_backup_method
         self.rpcserver = AsyncXMLRPCServer(poolsize, ("", port), AuthRequestHandler, allow_none=True)
         self.rpcserver.register_multicall_functions()
         self.register_all_functions()
@@ -402,6 +414,8 @@ class RemServer(object):
         self.register_function(queue_set_success_lifetime, "queue_set_success_lifetime")
         self.register_function(queue_set_error_lifetime, "queue_set_error_lifetime")
         self.register_function(set_backupable_state, "set_backupable_state")
+        if self.allow_backup_method:
+            self.register_function(do_backup, "do_backup")
 
     def request_processor(self):
         rpc_fd = self.rpcserver.fileno()
@@ -427,24 +441,33 @@ class RemServer(object):
 class RemDaemon(object):
     def __init__(self, scheduler, context):
         self.scheduler = scheduler
-        self.api_servers = [RemServer(context.manager_port, context.xmlrpc_pool_size, scheduler)]
+        self.api_servers = [
+            RemServer(context.manager_port, context.xmlrpc_pool_size, scheduler,
+                      allow_backup_method=context.allow_backup_rpc_method)
+        ]
         if context.manager_readonly_port:
             self.api_servers.append(RemServer(context.manager_readonly_port,
-                                              context.readonly_xmlrpc_pool_size, scheduler, readonly=True))
+                                              context.readonly_xmlrpc_pool_size,
+                                              scheduler,
+                                              allow_backup_method=context.allow_backup_rpc_method,
+                                              readonly=True))
         self.regWorkers = []
         self.timeWorker = None
 
     def process_backups(self):
-        sys.setrecursionlimit(10000)
         nextBackupTime = time.time() + self.scheduler.backupPeriod
         while self.scheduler.alive:
             if time.time() >= nextBackupTime:
                 try:
                     self.scheduler.RollBackup()
-                except Exception, e:
-                    logging.exception("rem-server\tbackup error : %s", e)
-                finally:
-                    nextBackupTime = time.time() + self.scheduler.backupPeriod
+                except:
+                    pass
+
+                nextBackupTime = time.time() + self.scheduler.backupPeriod
+
+                logging.debug("rem-server\tnext backup time: %s" \
+                    % datetime.datetime.fromtimestamp(nextBackupTime).strftime('%H:%M'))
+
             time.sleep(max(self.scheduler.backupPeriod, 0.01))
 
     def signal_handler(self, signum, frame):
@@ -485,16 +508,22 @@ class RemDaemon(object):
         #register signal handlers
         osspec.reg_signal_handler(signal.SIGINT, self.signal_handler)
         osspec.reg_signal_handler(signal.SIGTERM, self.signal_handler)
+
         #start regular workers
         self.start_workers()
+
         #start xmlrpc server
         for server in self.api_servers:
             server.start()
             #main cycle for backups
+
+        logging.debug("rem-server\tall_started")
+
         self.process_backups()
         #final backup
         while not self.permitFinalBackup:
             time.sleep(0.01)
+
         self.scheduler.RollBackup()
 
 
@@ -510,7 +539,6 @@ def scheduler_test():
         for tagname, tagvalue in sc.tagRef.ListTags():
             if tagvalue: print "tag: [{0}]".format(tagname)
 
-    sys.setrecursionlimit(10000)
     print_tags(_scheduler)
     qname = "userdata"
     print list_queues()

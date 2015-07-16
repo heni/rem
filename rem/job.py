@@ -88,7 +88,6 @@ class Job(Unpickable(err=nullobject,
                      tries=int,
                      pipe_fail=bool,
                      description=str,
-                     extended_description=str,
                      max_working_time=(int, constants.KILL_JOB_DEFAULT_TIMEOUT),
                      notify_timeout=(int, constants.NOTIFICATION_TIMEOUT),
                      working_time=int,
@@ -100,8 +99,7 @@ class Job(Unpickable(err=nullobject,
     ERR_PENALTY_FACTOR = 6
 
     def __init__(self, shell, parents, pipe_parents, packetRef, maxTryCount, limitter, max_err_len=None,
-                 retry_delay=None, pipe_fail=False, description="", extended_description="", notify_timeout=constants.NOTIFICATION_TIMEOUT,
-                 max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
+                 retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
         super(Job, self).__init__()
         self.maxTryCount = maxTryCount
         self.limitter = limitter
@@ -113,7 +111,6 @@ class Job(Unpickable(err=nullobject,
         self.retry_delay = retry_delay
         self.pipe_fail = pipe_fail
         self.description = description
-        self.extended_description = extended_description
         self.notify_timeout = notify_timeout
         self.max_working_time = max_working_time
         if self.limitter:
@@ -221,11 +218,9 @@ class Job(Unpickable(err=nullobject,
             run_args = [osspec.get_shell_location()] + (["-o", "pipefail"] if self.pipe_fail else []) \
                        + ["-c", self.shell]
             logging.debug("out: %s, in: %s", self.output, self.input)
-            env=os.environ
-            env['REM_JOB_DESCRIPTION'] = self.extended_description
             process = subprocess.Popen(run_args, stdout=self.output.fileno(), stdin=self.input.fileno(),
                                        stderr=self.errPipe[1].fileno(), close_fds=True, cwd=self.packetRef.directory,
-                                       preexec_fn=os.setpgrp, env=env)
+                                       preexec_fn=os.setpgrp)
             jobPid = process.pid
             #in case when we stopped during start implicitly kill himself
             if jobPid is not None:

@@ -10,11 +10,10 @@ from common import BinaryFile, PickableRLock, SendEmail, Unpickable, safeStringE
 from job import Job, PackedExecuteResult
 import osspec
 
-
 class PacketState(object):
     CREATED = "CREATED"                 #created only packet
     WORKABLE = "WORKABLE"               #working packet without pending jobs
-    PENDING = "PENDING"                 #working packet with pending jobs
+    PENDING = "PENDING"                 #working packet with pending jobs 
     SUSPENDED = "SUSPENDED"            #suspended packet
     ERROR = "ERROR"                     #unresolved error exists
     SUCCESSFULL = "SUCCESSFULL"         #successfully done packet
@@ -63,12 +62,13 @@ class PCL_StateChange(object):
 
 
 class PacketCustomLogic(object):
-    from messages import GetHelperByPacketState, GetEmergencyHelper, GetLongExecutionWarningHelper
+    from messages import GetHelperByPacketState, GetEmergencyHelper, GetLongExecutionWarningHelper, GetResetNotificationHelper
 
     SchedCtx = None
     StateMessageHelper = staticmethod(GetHelperByPacketState)
     EmergencyMessageHelper = staticmethod(GetEmergencyHelper)
     LongExecutionWorkningHelper = staticmethod(GetLongExecutionWarningHelper)
+    ResetNotificationHelper = staticmethod(GetResetNotificationHelper)
 
     def __init__(self, pck):
         self.pck = pck
@@ -85,6 +85,11 @@ class PacketCustomLogic(object):
         logging.error("incorrect state for \"Get\" operation: %s, packet %s will be markered for delete",
                       self.pck.state, self.pck.name)
         msgHelper = self.EmergencyMessageHelper(self.pck, self.SchedCtx)
+        if msgHelper:
+            SendEmail(self.pck.notify_emails, msgHelper)
+
+    def DoResetNotification(self, message):
+        msgHelper = self.ResetNotificationHelper(self.pck, self.SchedCtx, message)
         if msgHelper:
             SendEmail(self.pck.notify_emails, msgHelper)
 
@@ -119,6 +124,13 @@ class JobPacketImpl(object):
                 self.waitTags.remove(tagname)
             if len(self.waitTags) == 0 and self.state == PacketState.SUSPENDED:
                 self.Resume()
+
+    def VivifyDoneTagsIfNeed(self, tagStorage):
+        if isinstance(self.done_indicator, str):
+            self.done_indicator = tagStorage.AcquireTag(self.done_indicator)
+        for jid, cur_val in self.job_done_indicator.iteritems():
+            if isinstance(cur_val, str):
+                self.job_done_indicator[jid] = tagStorage.AcquireTag(cur_val)
 
     def UpdateTagDependencies(self, tagStorage):
         self.waitTags = tagset(self.waitTags)
@@ -276,13 +288,14 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                            history=(list, []),
                            notify_emails=(list, []),
                            flags=int,
-                           kill_all_jobs_on_error=(bool, True)),
+                           kill_all_jobs_on_error=(bool, True),
+                           isResetable=(bool, True)),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
     INCORRECT = -1
 
-    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True):
+    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True, isResetable=True):
         super(JobPacket, self).__init__()
         self.name = name
         self.state = PacketState.NONINITIALIZED
@@ -294,6 +307,19 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
         self.SetWaitingTags(wait_tags)
         self.done_indicator = set_tag
         self.kill_all_jobs_on_error = kill_all_jobs_on_error
+        self.isResetable = isResetable
+
+    def __getstate__(self):
+        sdict = CallbackHolder.__getstate__(self)
+
+        if sdict['done_indicator']:
+            sdict['done_indicator'] = sdict['done_indicator'].name
+
+        job_done_indicator = sdict['job_done_indicator'] = sdict['job_done_indicator'].copy()
+        for job_id, tag in job_done_indicator.iteritems():
+            job_done_indicator[job_id] = tag.name
+
+        return sdict
 
     def Init(self, context):
         logging.info("packet init: %r %s", self, self.state)
@@ -398,8 +424,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             self.ProcessTagEvent(ref)
 
     def Add(self, shell, parents, pipe_parents, set_tag, tries,
-            max_err_len, retry_delay, pipe_fail, description, extended_description,
-            notify_timeout, max_working_time, output_to_status):
+            max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time, output_to_status):
         if self.state not in (PacketState.CREATED, PacketState.SUSPENDED):
             raise RuntimeError("incorrect state for \"Add\" operation: %s" % self.state)
         with self.lock:
@@ -407,8 +432,7 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             pipe_parents = list(p.id for p in pipe_parents)
             job = Job(shell, parents, pipe_parents, self, maxTryCount=tries,
                       limitter=None, max_err_len=max_err_len, retry_delay=retry_delay,
-                      pipe_fail=pipe_fail, description=description, extended_description=extended_description,
-                      notify_timeout=notify_timeout, max_working_time=max_working_time, output_to_status=output_to_status)
+                      pipe_fail=pipe_fail, description=description, notify_timeout=notify_timeout, max_working_time=max_working_time, output_to_status=output_to_status)
             self.jobs[job.id] = job
             if set_tag:
                 self.job_done_indicator[job.id] = set_tag
@@ -554,7 +578,6 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
                     dict(id=str(job.id),
                          shell=job.shell,
                          desc=job.description,
-                         ext_desc=job.extended_description,
                          state=state,
                          results=results,
                          parents=parents,
@@ -629,16 +652,20 @@ class JobPacket(Unpickable(lock=PickableRLock.create,
             job.results = []
         self.Resume()
 
-    def OnReset(self, ref):
+    def OnReset(self, (ref, message)):
         if isinstance(ref, Tag):
-            if self.state == PacketState.SUCCESSFULL and self.done_indicator:
-                self.done_indicator.Reset()
-            for job_id in list(self.done):
-                tag = self.job_done_indicator.get(job_id)
-                if tag:
-                    tag.Reset()
             self.waitTags.add(ref.GetFullname())
-            self.Reset()
+            if self.isResetable:
+                if self.state == PacketState.SUCCESSFULL and self.done_indicator:
+                    self.done_indicator.Reset(message)
+                for job_id in list(self.done):
+                    tag = self.job_done_indicator.get(job_id)
+                    if tag:
+                        tag.Reset(message)
+                self.Reset()
+            else:
+                if self.state == PacketState.SUCCESSFULL:
+                    PacketCustomLogic(self).DoResetNotification(message)
 
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in

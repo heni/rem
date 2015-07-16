@@ -76,10 +76,10 @@ class Tag(CallbackHolder):
         self.done = False
         self.FireEvent("undone")
 
-    def Reset(self):
+    def Reset(self, message):
         logging.debug("tag %s\treset", self.name)
         self.done = False
-        self.FireEvent("reset")
+        self.FireEvent("reset", (self, message))
 
     def GetName(self):
         return self.name
@@ -102,7 +102,7 @@ class RemoteTag(Tag):
     def Set(self):
         raise RuntimeError("Attempt to set RemoteTag %r", self)
 
-    def Reset(self):
+    def Reset(self, message):
         raise RuntimeError("Attempt to reset RemoteTag %r", self)
 
     def SetRemote(self):

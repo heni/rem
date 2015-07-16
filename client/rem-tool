@@ -13,6 +13,7 @@ possible actions:
     stop     - stop packet execution (suspend and kill all jobs, --packet have to been set)
     resume   - resume object execution  (--queue or --packet have to been set)
     restart  - restart object execution (only for errored packets, --packet have to been set)
+    reset    - reset tag (--tag have to been set)
     status   - print object status (--queue, --packet or --tag have to been set)
     delete   - delete concrete packet""")
     parser.add_option("-u", "--url", dest="url", default="http://localhost:8104/", help="set REM server url")
@@ -99,6 +100,8 @@ class TagManipCommander(ICommander):
             tag.Set()
         elif self.type == "unset":
             tag.Unset()
+        elif self.type == "reset":
+            tag.Reset()
 
 
 class LifeCommander(ICommander):
@@ -120,10 +123,10 @@ class LifeCommander(ICommander):
         elif self.type == "restart":
             if not isinstance(object, remclient.JobPacketInfo):
                 raise CommandExecutionError("only packets may be restarted")
-            if object.state == 'ERROR':
-                object.RestartFromErrors()
-            else:
+            if object.state == 'SUCCESSFULL':
                 object.Restart()
+            else:
+                object.RestartFromErrors()
         elif self.type == "delete":
             object.Delete()
         else:
@@ -172,7 +175,9 @@ def main():
     disp_commands = {"list": ListCommander, "suspend": LifeCommander, "resume": LifeCommander, "restart": LifeCommander,
                      "status": StatusCommander, "update": UpdateCommander, "delete": LifeCommander,
                      "set": TagManipCommander,
-                     "unset": TagManipCommander, "move": MoveCommander, "stop": LifeCommander}
+                     "unset": TagManipCommander,
+                     "reset": TagManipCommander,
+                     "move": MoveCommander, "stop": LifeCommander}
     with disp_commands[args[0]](opt, args) as commander:
         commander()
 
