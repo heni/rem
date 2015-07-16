@@ -134,3 +134,14 @@ To: %(email-list)s
     sender.stdin.close()
     sender.communicate()
     return sender.poll()
+
+
+def set_process_title(proc_title):
+    try:
+        import prctl
+        prctl.set_name(proc_title)
+        prctl.set_proctitle(proc_title)
+        return True
+    except (ImportError, AttributeError):
+        return False
+
