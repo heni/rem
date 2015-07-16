@@ -73,7 +73,8 @@ class ThreadJobWorker(KillableWorker):
 
 
 class XMLRPCWorker(KillableWorker):
-    TICK_PERIOD = 0.01
+    TICK_PERIOD = 0.001
+    WAIT_PERIOD = 1
 
     def __init__(self, requests, func):
         super(XMLRPCWorker, self).__init__()
@@ -82,7 +83,7 @@ class XMLRPCWorker(KillableWorker):
 
     def do(self):
         try:
-            obj = self.requests.get(True, self.TICK_PERIOD)
+            obj = self.requests.get(True, self.WAIT_PERIOD)
         except StdQueue.Empty:
             return
         else:
