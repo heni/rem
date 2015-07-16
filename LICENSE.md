@@ -10,6 +10,7 @@ Authors:
     Yuliy Ayavazyan
     Eugene Krokhalev
     Artem Volkhin
+    Kirill Trofimenkov
 ~~~
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
