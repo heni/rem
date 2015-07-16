@@ -137,6 +137,9 @@ To: %(email-list)s
 
 
 def set_process_title(proc_title):
+    """Sets custom title to current process
+        Requires installed python-prctl module - http://pythonhosted.org/python-prctl/
+    """
     try:
         import prctl
         prctl.set_name(proc_title)
