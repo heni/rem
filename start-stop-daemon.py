@@ -83,12 +83,14 @@ class LogPrinter(object):
 
 
 class Service(object):
-    def __init__(self, runargs, pidfile, logfile, name=None, checkname=None):
+    def __init__(self, runargs, pidfile, logfile, name=None, checkname=None, customname=None):
         self.runArgs = runargs
         self.pidFile = pidfile
         self.logFile = logfile
         self.name = name or os.path.split(self.runArgs[0])[-1]
-        self.checkExecName = checkname or self.runArgs[0]
+        self.checkExecNames = [checkname or self.runArgs[0]]
+        if customname:
+            self.checkExecNames += [customname]
 
     def CheckProcess(self):
         """Checks if daemon is started
@@ -109,7 +111,7 @@ class Service(object):
                 return False
             with open(cmdfile) as psReader:
                 psLine = psReader.read()
-            if psLine.startswith(self.checkExecName):
+            if any(psLine.startswith(checkname) for checkname in self.checkExecNames):
                 return pid
             return False
         except:
@@ -209,8 +211,9 @@ class REMService(Service):
         if not os.path.isdir("var"): os.makedirs("var")
         super(REMService, self).__init__(
             runargs=runArgs, pidfile="var/rem.pid", logfile="var/rem.errlog", 
-            name="remd(\"%s\")" % self.serverName,
-            checkname="python"
+            name="remd%s" % (("(\"" + self.serverName + "\")") if self.serverName else ""),
+            checkname="python",
+            customname="[remd]"
         )
 
     def Configure(self):
@@ -221,9 +224,12 @@ class REMService(Service):
         if configFile not in configParser.read(configFile):
             raise EnvironmentError("some errors in configuration file \"%s\"" % configFile)
         self.serverURL = "http://localhost:%d/" % configParser.getint("server", "port")
-        self.serverName = configParser.get("server", "network_hostname")
-        self.setupScript = ". %s" % configParser.get("run", "setup_script") if configParser.has_option("run",
-                                                                                                       "setup_script") else ""
+        self.serverName = self.setupScript = None
+        try:
+            self.serverName = configParser.get("server", "network_hostname")
+            self.setupScript = ". %s" % configParser.get("run", "setup_script")
+        except ConfigParser.NoOptionError:
+            pass
 
     def CheckService(self, timeout=0.0):
         endTime = time.time() + timeout

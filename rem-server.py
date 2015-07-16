@@ -585,6 +585,7 @@ def scheduler_test():
 
 if __name__ == "__main__":
     _context = DefaultContext()
+    osspec.set_process_title("[remd]%s" % ((" at " + _context.network_name) if _context.network_name else ""))
     _scheduler = CreateScheduler(_context)
     _scheduler.Restore()
     if _context.execMode == "test":
