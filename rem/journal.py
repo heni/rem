@@ -110,12 +110,12 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
                 f.close()
             self.restoring_mode = False
 
-    def Rotate(self):
+    def Rotate(self, timestamp):
         logging.info("TagLogger.Rotate")
         with self.lock:
             self.file.close()
             if os.path.exists(self.db_file):
-                new_filename = "%s-%d" % (self.db_file, time.time())
+                new_filename = "%s-%d" % (self.db_file, timestamp)
                 os.rename(self.db_file, new_filename)
             self.Open(self.db_file)
 
@@ -125,5 +125,5 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
         for filename in os.listdir(dirname):
             if filename.startswith(db_filename) and filename != db_filename:
                 file_time = int(filename.split("-")[-1])
-                if file_time < final_time:
+                if file_time <= final_time:
                     os.remove(os.path.join(dirname, filename))
