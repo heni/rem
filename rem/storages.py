@@ -221,8 +221,8 @@ class TagStorage(object):
     def UnsetTag(self, tagname):
         self.AcquireTag(tagname).Unset()
 
-    def ResetTag(self, tagname):
-        self.AcquireTag(tagname).Reset()
+    def ResetTag(self, tagname, message):
+        self.AcquireTag(tagname).Reset(message)
 
     def CheckTag(self, tagname):
         return self.RawTag(tagname).IsSet()
