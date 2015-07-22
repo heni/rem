@@ -214,11 +214,11 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             if not os.path.isdir(self.backupDirectory):
                 os.makedirs(self.backupDirectory)
             start_time = time.time()
-            self.tagRef.tag_logger.Rotate()
+            self.tagRef.tag_logger.Rotate(start_time)
             if not self.backupable and not force:
                 logging.warning("REM is currently not in backupable state; change it back to backupable as soon as possible")
                 return
-            self.SaveData(os.path.join(self.backupDirectory, "sched-%.0f.dump" % time.time()))
+            self.SaveData(os.path.join(self.backupDirectory, "sched-%.0f.dump" % start_time))
             backupFiles = sorted(filter(self.CheckBackupFilename, os.listdir(self.backupDirectory)), reverse=True)
             unsuccessfulBackupFiles = filter(self.CheckUnsuccessfulBackupFilename, os.listdir(self.backupDirectory))
             for filename in backupFiles[self.backupCount:] + unsuccessfulBackupFiles:
