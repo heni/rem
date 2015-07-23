@@ -3,7 +3,6 @@ import bsddb3
 import cPickle
 import logging
 import os
-import time
 
 from common import Unpickable, PickableRLock
 from callbacks import ICallbackAcceptor
@@ -83,18 +82,20 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
     def OnReset(self, (tag, message)):
         self.LogEvent(ResetTagEvent, tag.GetFullname(), message)
 
-    def Restore(self):
+    def Restore(self, timestamp):
         logging.debug("TagLogger.Restore")
         dirname, db_filename = os.path.split(self.db_file)
 
         def get_filenames():
             result = []
             for filename in os.listdir(dirname):
-                if filename.startswith(db_filename):
-                    result.append(filename)
+                if filename.startswith(db_filename) and filename != db_filename:
+                    file_time = int(filename.split("-")[-1])
+                    if file_time > timestamp:
+                        result.append(filename)
             result = sorted(result)
-            if result and result[0] == db_filename:
-                result = result[1:] + result[:1]
+            if os.path.isfile(self.db_file):
+                result += [db_filename]
             return result
 
         with self.lock:

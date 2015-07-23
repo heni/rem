@@ -99,7 +99,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                            packetNamesTracker=PacketNamesStorage
                         ),
                 ICallbackAcceptor):
-    BackupFilenameMatchRe = re.compile("sched-\d*.dump$")
+    BackupFilenameMatchRe = re.compile("sched-(\d+).dump$")
     UnsuccessfulBackupFilenameMatchRe = re.compile("sched-\d*.dump.tmp$")
 
     def __init__(self, context):
@@ -204,6 +204,9 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def CheckBackupFilename(self, filename):
         return bool(self.BackupFilenameMatchRe.match(filename))
+
+    def ExtractTimestampFromBackupFilename(self, filename):
+        return int(self.BackupFilenameMatchRe.match(filename).group(1))
 
     def CheckUnsuccessfulBackupFilename(self, filename):
         return bool(self.UnsuccessfulBackupFilenameMatchRe.match(filename))
@@ -324,8 +327,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             ObjectRegistrator_.LogStats()
             common.ObjectRegistrator_ = FakeObjectRegistrator()
 
-    def Restore(self):
-        self.tagRef.Restore()
+    def Restore(self, timestamp):
+        self.tagRef.Restore(timestamp)
 
     def RegisterQueues(self, qRef):
         for q in qRef.itervalues():
@@ -337,19 +340,22 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         for pck in list(q.ListAllPackets()):
             dstStorage = self.packStorage
             pck.UpdateTagDependencies(self.tagRef)
-            if pck.directory and os.path.isdir(pck.directory):
-                parentDir, dirname = os.path.split(pck.directory)
-                if parentDir != self.context.packets_directory:
-                    dst_loc = os.path.join(self.context.packets_directory, pck.id)
-                    try:
-                        logging.warning("relocates directory %s to %s", pck.directory, dst_loc)
-                        shutil.copytree(pck.directory, dst_loc)
-                        pck.directory = dst_loc
-                    except Exception, e:
-                        logging.exception("relocation FAIL : %s", e)
-                        dstStorage = None
-            elif pck.directory and not os.path.isdir(pck.directory):
-                os.makedirs(pck.directory)
+            if pck.directory:
+                if os.path.isdir(pck.directory):
+                    parentDir, dirname = os.path.split(pck.directory)
+                    if parentDir != self.context.packets_directory:
+                        dst_loc = os.path.join(self.context.packets_directory, pck.id)
+                        try:
+                            logging.warning("relocates directory %s to %s", pck.directory, dst_loc)
+                            shutil.copytree(pck.directory, dst_loc)
+                            pck.directory = dst_loc
+                        except Exception, e:
+                            logging.exception("relocation FAIL : %s", e)
+                            dstStorage = None
+                else:
+                    pck.directory = os.path.join(self.context.packets_directory, os.path.basename(pck.directory))
+                    if not os.path.isdir(pck.directory):
+                        os.makedirs(pck.directory)
             else:
                 if pck.state != PacketState.SUCCESSFULL:
                     dstStorage = None

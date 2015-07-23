@@ -83,7 +83,7 @@ class ObjectRegistrator(object):
 
     def register(self, obj, sdict):
         self.szCache[id(obj)] = fullSz = sum(
-            len(k) + self.szCache.get(id(obj), object.__sizeof__(obj)) for k, obj in sdict.iteritems())
+            object.__sizeof__(k) + self.szCache.get(id(obj), object.__sizeof__(obj)) for k, obj in sdict.iteritems())
         smallSz = object.__sizeof__(sdict)
         self.sum_size += smallSz
         self.count += 1
