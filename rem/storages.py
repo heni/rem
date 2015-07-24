@@ -126,9 +126,11 @@ class BinaryStorage(Unpickable(files=dict, lifeTime=(int, 3600), binDirectory=st
                     else:
                         badFiles.add(checksum)
                 file.Relink(estimated_path)
-            for checksum in badFiles:
-                del self.files[checksum]
-                logging.warning("binstorage\tnonexisted file %s cleaning attempt", checksum)
+            if badFiles:
+                for checksum in badFiles:
+                    del self.files[checksum]
+                    logging.warning("binstorage\tnonexisted file %s cleaning attempt", checksum)
+                logging.warning("can't recover %d files; %d files left in storage", len(badFiles), len(self.files))
         self.binDirectory = context.binary_directory
         self.lifeTime = context.binary_lifetime
 
