@@ -639,6 +639,8 @@ class Connector(object):
             resetable - флаг, контролирующий возможность трансляции через пакет цепочки Reset'ов (по умолчанию - True)
         возвращает объект класса JobPacket"""
         try:
+            if isinstance(wait_tags, str):
+                raise AttributeError("wrong wait_tags attribute type")
             return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness, resetable,
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
         except xmlrpclib.Fault, e:
