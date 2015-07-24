@@ -68,3 +68,5 @@ send_emergency_emails = no
 use_memory_profiler = no
 #максимальный интервал между попытками отправки извещений другим REM-ам
 max_remotetags_resend_delay = 300 ; 5 минут
+#разрешать ли форсированный (через XMLRPC) бэкап
+allow_backup_rpc_method = no
