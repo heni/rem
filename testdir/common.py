@@ -25,9 +25,9 @@ Config = SharedValue()
 def WaitForExecution(pckInfo, fin_states=("SUCCESSFULL", "ERROR"), timeout=1.0):
     while True:
         pckInfo.update()
-        logging.info("packet state: %s", pckInfo.state)
         if pckInfo.state in fin_states:
             break
+        logging.info("packet state: %s", pckInfo.state)
         time.sleep(timeout)
     return pckInfo.state
 
