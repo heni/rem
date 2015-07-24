@@ -5,7 +5,7 @@ import logging
 import os
 
 from common import Unpickable, PickableRLock
-from callbacks import ICallbackAcceptor
+from callbacks import ICallbackAcceptor, RemoteTag, Tag
 
 
 class TagEvent(object):
@@ -18,7 +18,11 @@ class TagEvent(object):
 
 class SetTagEvent(TagEvent):
     def Redo(self, tag_logger):
-        tag_logger.tagRef.SetTag(self.tagname)
+        tagRef = tag_logger.tagRef
+        if tagRef.IsRemoteName(self.tagname):
+            tagRef.SetRemoteTag(self.tagname)
+        else:
+            tagRef.SetTag(self.tagname)
 
 
 class UnsetTagEvent(TagEvent):
@@ -74,7 +78,8 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
         self.LockedAppend(cPickle.dumps(obj))
 
     def OnDone(self, tag):
-        self.LogEvent(SetTagEvent, tag.GetFullname())
+        if isinstance(tag, (Tag, RemoteTag)):
+            self.LogEvent(SetTagEvent, tag.GetFullname())
 
     def OnUndone(self, tag):
         self.LogEvent(UnsetTagEvent, tag.GetFullname())
