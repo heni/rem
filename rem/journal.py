@@ -83,7 +83,7 @@ class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
         self.LogEvent(ResetTagEvent, tag.GetFullname(), message)
 
     def Restore(self, timestamp):
-        logging.debug("TagLogger.Restore")
+        logging.debug("TagLogger.Restore(%d)", timestamp)
         dirname, db_filename = os.path.split(self.db_file)
 
         def get_filenames():

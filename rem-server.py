@@ -67,15 +67,14 @@ def CreateScheduler(context, canBeClear=False):
             if sched.CheckBackupFilename(name):
                 backupFile = os.path.join(context.backup_directory, name)
                 try:
-                    with open(backupFile, "r") as backupReader:
-                        sched.Deserialize(backupReader)
-                    return sched, sched.ExtractTimestampFromBackupFilename(name)
+                    sched.Deserialize(backupFile)
+                    return sched
                 except Exception, e:
                     logging.exception("can't restore from file \"%s\" : %s", backupFile, e)
                     wasRestoreTry = True
     if wasRestoreTry and not canBeClear:
         raise RuntimeError("can't restore from backup")
-    return sched, None
+    return sched
 
 
 def readonly_method(func):
@@ -586,8 +585,7 @@ def scheduler_test():
 if __name__ == "__main__":
     _context = DefaultContext()
     osspec.set_process_title("[remd]%s" % ((" at " + _context.network_name) if _context.network_name else ""))
-    _scheduler, _timestamp = CreateScheduler(_context)
-    _scheduler.Restore(_timestamp or 0)
+    _scheduler = CreateScheduler(_context)
     if _context.execMode == "test":
         scheduler_test()
     elif _context.execMode == "start":
