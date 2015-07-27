@@ -265,3 +265,7 @@ class T02(unittest.TestCase):
     def testQueueDoesntExist(self):
         """Tests that read operations on non-existent queue fail"""
         self.assertRaises(xmlrpclib.Fault, lambda: self.connector.Queue('queue-that-doesnt-exist').Status())
+
+    def testWrongTagDependency(self):
+        """Tests exception raise for wide-common wait_tags incorrect usage"""
+        self.assertRaises(AttributeError, lambda: self.connector.Packet("test", wait_tags="test"))
