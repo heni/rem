@@ -206,7 +206,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         return bool(self.BackupFilenameMatchRe.match(filename))
 
     def ExtractTimestampFromBackupFilename(self, filename):
-        return int(self.BackupFilenameMatchRe.match(filename).group(1))
+        return int(self.BackupFilenameMatchRe.match(os.path.basename(filename)).group(1))
 
     def CheckUnsuccessfulBackupFilename(self, filename):
         return bool(self.UnsuccessfulBackupFilenameMatchRe.match(filename))
@@ -280,7 +280,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def __reduce__(self):
         return nullobject, ()
 
-    def Deserialize(self, stream):
+    def Deserialize(self, filename):
         import packet
         import cPickle as pickle
 
@@ -298,18 +298,19 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 pass
 
         with self.lock:
-            packets_registrator = PacketsRegistrator()
+            with open(filename, "r") as stream:
+                packets_registrator = PacketsRegistrator()
 
-            common.ObjectRegistrator_ = ObjectRegistrator_ \
-                = common.ObjectRegistratorsChain([
-                    packets_registrator,
-                    self.ObjectRegistratorClass()
-                ])
+                common.ObjectRegistrator_ = ObjectRegistrator_ \
+                    = common.ObjectRegistratorsChain([
+                        packets_registrator,
+                        self.ObjectRegistratorClass()
+                    ])
 
-            unpickler = pickle.Unpickler(stream)
+                unpickler = pickle.Unpickler(stream)
 
-            sdict = unpickler.load()
-            assert isinstance(sdict, dict)
+                sdict = unpickler.load()
+                assert isinstance(sdict, dict)
 
             #update internal structures
             qRef = sdict.pop("qRef")
@@ -319,6 +320,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.UpdateContext(None)
 
             tagStorage = self.tagRef
+            tagStorage.Restore(self.ExtractTimestampFromBackupFilename(filename))
             for pck in packets_registrator.packets:
                 pck.VivifyDoneTagsIfNeed(tagStorage)
 
@@ -326,9 +328,6 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             #output objects statistics
             ObjectRegistrator_.LogStats()
             common.ObjectRegistrator_ = FakeObjectRegistrator()
-
-    def Restore(self, timestamp):
-        self.tagRef.Restore(timestamp)
 
     def RegisterQueues(self, qRef):
         for q in qRef.itervalues():
