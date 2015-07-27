@@ -576,7 +576,7 @@ def scheduler_test():
         print "SUSPEND: %s => %s" % (suspendLength, len(sc.qRef[qname].suspended))
         print "deserialize time: %.3f" % (time.time() - stTime)
     print "tags listeners statistics: %s" % tag_listeners_stats(sc.tagRef)
-    print "scheduled tasks: ", sc.schedWatcher.tasks.objects, sc.schedWatcher.workingQueue
+    print "scheduled tasks: ", sc.schedWatcher.tasks, sc.schedWatcher.workingQueue
     while len(sc.schedWatcher.tasks) > 0:
         runner, runtm = sc.schedWatcher.tasks.pop()
         print runtm, runner
