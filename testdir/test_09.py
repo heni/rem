@@ -1,10 +1,9 @@
 import unittest
 import logging
 import threading
-import random
 import time
 import remclient
-from testdir import *
+from testdir import Config, WaitForExecution
 
 
 class T09(unittest.TestCase):
@@ -26,20 +25,20 @@ class T09(unittest.TestCase):
 
         class ClientThread(threading.Thread):
 
-            def __init__(self, signal, print_lock, rem_url, queue, tag, notify_emails, client_type):
+            def __init__(self, signal, rem_url, queue, tag, notify_emails, client_type, use_debug=False):
                 super(ClientThread, self).__init__()
                 self.signal = signal
-                self.printLock = print_lock
                 self.remUrl = rem_url
                 self.queue = queue
                 self.tag = tag
                 self.notifyEmails = notify_emails
                 self.clientType = client_type
                 self.pck = None
+                self.useDebug = use_debug
 
             def run(self):
-                with self.printLock:
-                    logging.info("Client thread started: tag=%s clientType=%s" % (self.tag, self.clientType))
+                if self.useDebug:
+                    logging.debug("Client thread started: tag=%s clientType=%s" % (self.tag, self.clientType))
 
                 self.signal.wait()
 
@@ -67,26 +66,25 @@ class T09(unittest.TestCase):
                     raise RuntimeError('Undefined clientType field value: %s!' % self.clientType)
 
                 queue.AddPacket(self.pck)
-
-                with self.printLock:
-                    logging.info("Client thread finished: tag=%s clientType=%s" % (self.tag, self.clientType))
+                if self.useDebug:
+                    logging.debug("Client thread finished: tag=%s clientType=%s" % (self.tag, self.clientType))
 
         N = 1000
-        printLock = threading.Lock()
         ts = time.time()
         tags = []
         creatorPackets = []
         checkerPackets = []
+        logging.info("massive multithreading packets append");
         for i in xrange(N):
             signal = threading.Event()
             queue = 'duplicate_tags_test'
             tag = 'dup_tag_%d_%d' % (int(ts), i)
             tags.append(tag)
 
-            threadCreator = ClientThread(signal, printLock, self.remUrl, queue, tag, self.notifyEmails, 'tag_creator')
+            threadCreator = ClientThread(signal, self.remUrl, queue, tag, self.notifyEmails, 'tag_creator')
             threadCreator.start()
 
-            threadChecker = ClientThread(signal, printLock, self.remUrl, queue, tag, self.notifyEmails, 'tag_checker')
+            threadChecker = ClientThread(signal, self.remUrl, queue, tag, self.notifyEmails, 'tag_checker')
             threadChecker.start()
 
             signal.set()
@@ -106,7 +104,7 @@ class T09(unittest.TestCase):
         for pck in checkerPackets:
             self.assertTrue(WaitForExecution(pck), "SUCCESSFULL")
 
+        logging.info('Checking tags "%s"', "dup_tag_*")
         for tagName in tags:
-            logging.info('Checking tag "%s"' % tagName)
             tag = self.connector.Tag(tagName)
             self.assertTrue(tag.Check())
