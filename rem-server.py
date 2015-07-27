@@ -540,7 +540,8 @@ def scheduler_test():
 
     print_tags(_scheduler)
     qname = "userdata"
-    print list_queues()
+    for q_stat in list_queues():
+        print q_stat
     pendingLength = workedLength = suspendLength = 0
     if qname in _scheduler.qRef:
         pendingLength = len(_scheduler.qRef[qname].pending)
@@ -564,22 +565,21 @@ def scheduler_test():
         print mem.heap()
     except:
         logging.exception("guppy error")
-        #deserialize backward attempt
-    with open("data.bin", "r") as buf:
-        stTime = time.time()
-        tmpContext = DefaultContext("copy")
-        sc = Scheduler(tmpContext)
-        sc.Deserialize(buf)
-        if qname in sc.qRef:
-            print "PENDING: %s => %s" % (pendingLength, len(sc.qRef[qname].pending))
-            print "WORKED: %s => %s" % (workedLength, len(sc.qRef[qname].worked))
-            print "SUSPEND: %s => %s" % (suspendLength, len(sc.qRef[qname].suspended))
-            print "deserialize time: %.3f" % (time.time() - stTime)
-        print "tags listeners statistics: %s" % tag_listeners_stats(sc.tagRef)
-        print "scheduled tasks: ", sc.schedWatcher.tasks.objects, sc.schedWatcher.workingQueue
-        while len(sc.schedWatcher.tasks) > 0:
-            runner, runtm = sc.schedWatcher.tasks.pop()
-            print runtm, runner
+    #deserialize backward attempt
+    stTime = time.time()
+    tmpContext = DefaultContext("copy")
+    sc = Scheduler(tmpContext)
+    sc.Deserialize("data.bin")
+    if qname in sc.qRef:
+        print "PENDING: %s => %s" % (pendingLength, len(sc.qRef[qname].pending))
+        print "WORKED: %s => %s" % (workedLength, len(sc.qRef[qname].worked))
+        print "SUSPEND: %s => %s" % (suspendLength, len(sc.qRef[qname].suspended))
+        print "deserialize time: %.3f" % (time.time() - stTime)
+    print "tags listeners statistics: %s" % tag_listeners_stats(sc.tagRef)
+    print "scheduled tasks: ", sc.schedWatcher.tasks.objects, sc.schedWatcher.workingQueue
+    while len(sc.schedWatcher.tasks) > 0:
+        runner, runtm = sc.schedWatcher.tasks.pop()
+        print runtm, runner
 
 
 if __name__ == "__main__":
