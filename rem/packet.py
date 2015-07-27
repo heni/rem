@@ -170,14 +170,23 @@ class JobPacketImpl(object):
                 old_file.Unlink(self, binname)
         self.CreateLink(binname, file)
 
+    def VivifyLink(self, context, link):
+        if isinstance(link, str):
+            link = context.Scheduler.binStorage.GetFileByHash(link)
+        elif isinstance(link, BinaryFile):
+            link = context.Scheduler.binStorage.GetFileByHash(link.checksum)
+        return link
+
     def CreateLinks(self, context):
         tmpLinks, self.binLinks = self.binLinks, {}
         while tmpLinks:
-            binname, file = tmpLinks.popitem()
-            if isinstance(file, str):
-                file = context.Scheduler.binStorage.GetFileByHash(file)
+            binname, link = tmpLinks.popitem()
+            file = self.VivifyLink(context, link)
             if file is not None:
                 self.CreateLink(binname, file)
+
+    def AreLinksAlive(self, context):
+        return all(self.VivifyLink(context, link) for link in self.binLinks.itervalues())
 
     """file resource manipulation methods"""
 

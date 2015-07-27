@@ -206,7 +206,10 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         return bool(self.BackupFilenameMatchRe.match(filename))
 
     def ExtractTimestampFromBackupFilename(self, filename):
-        return int(self.BackupFilenameMatchRe.match(os.path.basename(filename)).group(1))
+        name = os.path.basename(filename)
+        if self.CheckBackupFilename(name):
+            return int(self.BackupFilenameMatchRe.match(name).group(1))
+        return None
 
     def CheckUnsuccessfulBackupFilename(self, filename):
         return bool(self.UnsuccessfulBackupFilenameMatchRe.match(filename))
@@ -252,7 +255,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         p.dump(sdict)
 
     def SaveData(self, filename):
-        from StringIO import StringIO
+        from cStringIO import StringIO
 
         gc.collect()
 
@@ -320,7 +323,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             self.UpdateContext(None)
 
             tagStorage = self.tagRef
-            tagStorage.Restore(self.ExtractTimestampFromBackupFilename(filename))
+            tagStorage.Restore(self.ExtractTimestampFromBackupFilename(filename) or 0)
             for pck in packets_registrator.packets:
                 pck.VivifyDoneTagsIfNeed(tagStorage)
 
@@ -348,13 +351,20 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                             logging.warning("relocates directory %s to %s", pck.directory, dst_loc)
                             shutil.copytree(pck.directory, dst_loc)
                             pck.directory = dst_loc
-                        except Exception, e:
-                            logging.exception("relocation FAIL : %s", e)
+                        except:
+                            logging.exception("relocation FAIL")
                             dstStorage = None
                 else:
-                    pck.directory = os.path.join(self.context.packets_directory, os.path.basename(pck.directory))
-                    if not os.path.isdir(pck.directory):
-                        os.makedirs(pck.directory)
+                    if pck.AreLinksAlive(self.context):
+                        try:
+                            logging.warning("resurrects directory for packet %s", pck.id)
+                            pck.directory = None
+                            pck.CreatePlace(self.context)
+                        except:
+                            logging.exception("resurrecton FAIL")
+                            dstStorage = None
+                    else:
+                        dstStorage = None
             else:
                 if pck.state != PacketState.SUCCESSFULL:
                     dstStorage = None
