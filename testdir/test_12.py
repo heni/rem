@@ -2,8 +2,8 @@ import logging
 import time
 import unittest
 import tempfile
-import remclient
-from testdir import *
+import random
+from testdir import Config
 
 
 class T12(unittest.TestCase):
@@ -41,11 +41,11 @@ class T12(unittest.TestCase):
         """This test creates a huge file (about 100MB) and adds packages with this file
         without checksum-cache usage and with it.
         The idea of test is to measure time in both cases."""
-        try:
-            repeat_count = 100
+        repeat_count = 100
 
-            start = time.time()
-            hugeFile = T12.__createHugeFile()
+        start = time.time()
+        hugeFile = T12.__createHugeFile()
+        try:
             logging.info('Huge binary file creation time: %f seconds' % (time.time() - start, ))
 
             start = time.time()
@@ -65,4 +65,5 @@ class T12(unittest.TestCase):
 
             self.connector.checksumDbPath = None
         finally:
+            logging.exception("something wrong during test")
             hugeFile.close()
