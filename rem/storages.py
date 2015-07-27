@@ -284,8 +284,8 @@ class TagStorage(object):
         self.additional_listeners.add(context.Scheduler.connManager)
         self.additional_listeners.add(self.tag_logger)
 
-    def Restore(self):
-        self.tag_logger.Restore()
+    def Restore(self, timestamp):
+        self.tag_logger.Restore(timestamp)
 
     def ListDependentPackets(self, tag_name):
         return self.RawTag(tag_name).GetListenersIds()
