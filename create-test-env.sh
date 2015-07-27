@@ -18,6 +18,7 @@ create_rem_directory() {
     sed -ibak "/^network_topology/s|.*|network_topology = local://$DIR/network_topology.cfg|g" $DIR/rem.cfg
     sed -ibak "/^network_hostname/s|.*|network_hostname = $NAME|g" $DIR/rem.cfg
     sed -ibak "s|port\s*=\s*\([1-9]*\)|port = ${BASE_PORT}\1|g" $DIR/rem.cfg
+    sed -ibak "s|allow_backup_rpc_method\s*=\s*no|allow_backup_rpc_method = yes|g" $DIR/rem.cfg
 }
 
 cat <<CONFIG > network_topology.cfg
