@@ -16,7 +16,7 @@ class Queue(Unpickable(pending=PackSet.create,
                        working=emptyset,
                        isSuspended=bool,
                        noninitialized=set,
-                       lock=PickableRLock.create,
+                       lock=PickableRLock,
                        errorForgetTm=int,
                        successForgetTm=int,
                        workingLimit=(int, 1),
@@ -34,8 +34,6 @@ class Queue(Unpickable(pending=PackSet.create,
         self.name = name
 
     def __getstate__(self):
-        self.forgetOldItems(self.worked, self.success_lifetime or self.successForgetTm)
-        self.forgetOldItems(self.errored, self.errored_lifetime or self.errorForgetTm)
         sdict = getattr(super(Queue, self), "__getstate__", lambda: self.__dict__)()
         with self.lock:
             for q in self.VIEW_BY_ORDER:
@@ -68,7 +66,11 @@ class Queue(Unpickable(pending=PackSet.create,
         self.successForgetTm = context.success_lifetime
         self.errorForgetTm = context.error_lifetime
 
-    def forgetOldItems(self, queue, expectedLifetime):
+    def forgetOldItems(self):
+        self.forgetQueueOldItems(self.worked, self.success_lifetime or self.successForgetTm)
+        self.forgetQueueOldItems(self.errored, self.errored_lifetime or self.errorForgetTm)
+
+    def forgetQueueOldItems(self, queue, expectedLifetime):
         barrierTm = time.time() - expectedLifetime
         while len(queue) > 0:
             job, tm = queue.peak()

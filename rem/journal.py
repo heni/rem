@@ -39,7 +39,7 @@ class ResetTagEvent(TagEvent, Unpickable(message=str)):
         tag_logger.tagRef.ResetTag(self.tagname, self.message)
 
 
-class TagLogger(Unpickable(lock=PickableRLock.create), ICallbackAcceptor):
+class TagLogger(Unpickable(lock=PickableRLock), ICallbackAcceptor):
     def __init__(self, tagRef):
         super(TagLogger, self).__init__()
         self.file = None

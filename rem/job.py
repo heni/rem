@@ -12,6 +12,7 @@ import osspec
 import packet
 import constants
 
+DUMMY_COMMAND_CREATOR = None
 
 def cut_message(msg, BEG_LEN=None, FIN_LEN=None):
     BEG_LEN = BEG_LEN or 1000
@@ -202,6 +203,11 @@ class Job(Unpickable(err=nullobject,
                 self.packetRef.Suspend(kill_jobs=True)
                 self.packetRef.changeState(packet.PacketState.ERROR)
 
+    def _make_run_args(self):
+        return [osspec.get_shell_location()] \
+            + (["-o", "pipefail"] if self.pipe_fail else []) \
+            + ["-c", self.shell]
+
     def Run(self, worker_trace_pids=None):
         self.alive = True
         self.input = self.output = None
@@ -215,8 +221,10 @@ class Job(Unpickable(err=nullobject,
             self.FireEvent("start")
             startTime = time.localtime()
             self.errPipe = map(os.fdopen, os.pipe(), 'rw')
-            run_args = [osspec.get_shell_location()] + (["-o", "pipefail"] if self.pipe_fail else []) \
-                       + ["-c", self.shell]
+
+            run_args = DUMMY_COMMAND_CREATOR(self) if DUMMY_COMMAND_CREATOR \
+                       else self._make_run_args()
+
             logging.debug("out: %s, in: %s", self.output, self.input)
             process = subprocess.Popen(run_args, stdout=self.output.fileno(), stdin=self.input.fileno(),
                                        stderr=self.errPipe[1].fileno(), close_fds=True, cwd=self.packetRef.directory,

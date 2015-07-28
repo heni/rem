@@ -283,7 +283,7 @@ class JobPacketImpl(object):
 
 
 # job module.
-class JobPacket(Unpickable(lock=PickableRLock.create,
+class JobPacket(Unpickable(lock=PickableRLock,
                            jobs=dict,
                            job_done_indicator=dict,
                            edges=dict,
