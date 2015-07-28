@@ -2,7 +2,6 @@ PYMODULE(_fork_locking)
 
 OWNER(
     ekrokhalev
-    lexplua
     trofimenkov
 )
 
