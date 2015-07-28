@@ -2,7 +2,6 @@ from __future__ import with_statement
 import logging
 import os
 import sys
-import threading
 import time
 import weakref
 import bsddb3
@@ -13,8 +12,8 @@ from callbacks import Tag, RemoteTag, CallbackHolder
 from journal import TagLogger
 from callbacks import ICallbackAcceptor
 from packet import PacketState, JobPacket
-from collections import namedtuple
 from Queue import Queue
+import fork_locking
 
 __all__ = ["GlobalPacketStorage", "BinaryStorage", "ShortStorage", "TagStorage", "PacketNamesStorage", "MessageStorage"]
 
@@ -46,11 +45,10 @@ class GlobalPacketStorage(object):
 
 
 class ShortStorage(Unpickable(packets=(TimedMap.create, {}),
-                              lock=PickableLock.create)):
+                              lock=PickableLock)):
     PCK_LIFETIME = 1800
 
     def __getstate__(self):
-        self.forgetOldItems()
         sdict = self.__dict__.copy()
         sdict["packets"] = sdict["packets"].copy()
         return getattr(super(ShortStorage, self), "__getstate__", lambda: sdict)()
@@ -88,7 +86,6 @@ class BinaryStorage(Unpickable(files=dict, lifeTime=(int, 3600), binDirectory=st
         getattr(super(BinaryStorage, self), "__init__")()
 
     def __getstate__(self):
-        self.forgetOldItems()
         sdict = self.__dict__.copy()
         sdict["files"] = sdict["files"].copy()
         return getattr(super(BinaryStorage, self), "__getstate__", lambda: sdict)()
@@ -207,7 +204,6 @@ class TagStorage(object):
                 self.db_file = args[0].db_file
 
     def __reduce__(self):
-        self.tofileOldItems()
         return TagStorage, (self.inmem_items.copy(), )
 
     def SetTag(self, tagname):
@@ -318,7 +314,7 @@ class TagStorage(object):
 class PacketNamesStorage(ICallbackAcceptor):
     def __init__(self, *args, **kwargs):
         self.names = set(kwargs.get('names_list', []))
-        self.lock = threading.Lock()
+        self.lock = fork_locking.Lock()
 
     def __getstate__(self):
         return {}

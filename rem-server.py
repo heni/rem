@@ -67,7 +67,7 @@ def CreateScheduler(context, canBeClear=False):
             if sched.CheckBackupFilename(name):
                 backupFile = os.path.join(context.backup_directory, name)
                 try:
-                    sched.Deserialize(backupFile)
+                    sched.LoadBackup(backupFile)
                     return sched
                 except Exception, e:
                     logging.exception("can't restore from file \"%s\" : %s", backupFile, e)
@@ -346,15 +346,7 @@ def set_backupable_state(bckpFlag):
 
 @traced_rpc_method("warning")
 def do_backup():
-    t0 = time.time()
-    try:
-        logging.debug("rem-server\tbefore backup")
-        _scheduler.RollBackup(force=True)
-    except Exception, e:
-        logging.exception("rem-server\tbackup error : %s", e)
-    else:
-        logging.debug("rem-server\tafter backup")
-    return [time.time() - t0]
+    return _scheduler.RollBackup(force=True, child_max_working_time=None)
 
 class RemServer(object):
     def __init__(self, port, poolsize, scheduler, allow_backup_method=False, readonly=False):
@@ -554,7 +546,7 @@ def scheduler_test():
 
     #serialize all data to data.bin file
     stTime = time.time()
-    _scheduler.SaveData("data.bin")
+    _scheduler.SaveBackup("data.bin")
     print "serialize time: %.3f" % (time.time() - stTime)
 
     #print memory usage statistics
@@ -569,7 +561,7 @@ def scheduler_test():
     stTime = time.time()
     tmpContext = DefaultContext("copy")
     sc = Scheduler(tmpContext)
-    sc.Deserialize("data.bin")
+    sc.LoadBackup("data.bin")
     if qname in sc.qRef:
         print "PENDING: %s => %s" % (pendingLength, len(sc.qRef[qname].pending))
         print "WORKED: %s => %s" % (workedLength, len(sc.qRef[qname].worked))

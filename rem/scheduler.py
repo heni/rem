@@ -1,7 +1,6 @@
 from __future__ import with_statement
 import copy
 import shutil
-import threading
 import time
 import logging
 import os
@@ -9,24 +8,23 @@ import re
 from collections import deque
 import gc
 import sys
-from threading import Condition
 from common import PickableStdQueue, PickableStdPriorityQueue
 import common
 from Queue import Empty
 
+import fork_locking
 from job import FuncJob, FuncRunner
-from common import Unpickable, TimedSet, PickableLock, FakeObjectRegistrator, ObjectRegistrator, nullobject, DiscardKey
+from common import Unpickable, TimedSet, PickableLock, PickableRLock, FakeObjectRegistrator, ObjectRegistrator, nullobject, DiscardKey
 from rem import PacketCustomLogic
 from connmanager import ConnectionManager
 from packet import JobPacket, PacketState, PacketFlag
 from queue import Queue
 from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage, MessageStorage
 from callbacks import ICallbackAcceptor, CallbackHolder
-
-
+import osspec
 
 class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
-                              lock=PickableLock.create,
+                              lock=PickableLock,
                               workingQueue=PickableStdQueue.create
                             ),
                    ICallbackAcceptor,
@@ -81,14 +79,44 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
         sdict = self.__dict__.copy()
         return getattr(super(SchedWatcher, self), "__getstate__", lambda: sdict)()
 
+class QueueList(object):
+    __slots__ = ['__list', '__exists']
 
-class Scheduler(Unpickable(lock=PickableLock.create,
-                           qList=deque, #list of all known queue
-                           qRef=dict, #inversed qList for searching queues by name
-                           in_deque=dict,
+    def __init__(self):
+        self.__list = deque()
+        self.__exists = set()
+
+    def push(self, q):
+        if q.name in self.__exists:
+            raise KeyError("Stack already contains %s queue" % q.name)
+
+        self.__exists.add(q.name)
+        self.__list.append(q)
+
+    def pop(self, *args):
+        if args and not self.__list:
+            return args[0] # default
+
+        q = self.__list.popleft()
+        self.__exists.remove(q.name)
+
+        return q
+
+    def __contains__(self, q):
+        return q.name in self.__exists
+
+    def __nonzero__(self):
+        return bool(len(self.__exists))
+
+    def __len__(self):
+        return len(self.__exists)
+
+class Scheduler(Unpickable(lock=PickableRLock,
+                           qRef=dict, #queues by name
                            tagRef=TagStorage, #inversed taglist for searhing tags by name
                            alive=(bool, False),
                            backupable=(bool, True),
+                           queues_with_jobs=QueueList,
                            binStorage=BinaryStorage.create,
                            #storage with knowledge about saved binary objects (files for packets)
                            packStorage=GlobalPacketStorage, #storage of all known packets
@@ -101,6 +129,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 ICallbackAcceptor):
     BackupFilenameMatchRe = re.compile("sched-(\d+).dump$")
     UnsuccessfulBackupFilenameMatchRe = re.compile("sched-\d*.dump.tmp$")
+    SerializableFields = ["qRef", "tagRef", "binStorage", "tempStorage", "schedWatcher", "connManager"]
 
     def __init__(self, context):
         getattr(super(Scheduler, self), "__init__")()
@@ -119,7 +148,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         self.tagRef.UpdateContext(self.context)
         PacketCustomLogic.UpdateContext(self.context)
         self.connManager.UpdateContext(self.context)
-        self.HasScheduledTask = threading.Condition(self.lock)
+        self.HasScheduledTask = fork_locking.Condition(self.lock)
         self.schedWatcher.UpdateContext(self.context)
 
     def OnWaitingStart(self, ref):
@@ -160,7 +189,7 @@ class Scheduler(Unpickable(lock=PickableLock.create,
 
     def Get(self):
         with self.lock:
-            while self.alive and not self.qList and self.schedWatcher.Empty():
+            while self.alive and not self.queues_with_jobs and self.schedWatcher.Empty():
                 self.HasScheduledTask.wait()
 
             if self.alive:
@@ -169,17 +198,13 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                     if schedRunner:
                         return FuncJob(schedRunner)
 
-                if self.qList:
-                    qname = self.qList.popleft()
-                    if isinstance(qname, Queue):
-                        qname = qname.name
-                    self.in_deque[qname] = False
-                    job = self.qRef[qname].Get(self.context)
-                    if self.qRef[qname].HasStartableJobs():
-                        self.qList.append(qname)
-                        self.in_deque[qname] = True
+                if self.queues_with_jobs:
+                    queue = self.queues_with_jobs.pop()
+                    job = queue.Get(self.context)
+                    if queue.HasStartableJobs():
+                        self.queues_with_jobs.push(queue)
                         self.HasScheduledTask.notify()
-                    return job
+                    return job # may be None
 
                 logging.warning("No tasks for execution after condition waking up")
 
@@ -190,9 +215,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
                 return
             with self.lock:
                 if queue.HasStartableJobs():
-                    if not self.in_deque.get(queue.name, False):
-                        self.qList.append(queue.name)
-                        self.in_deque[queue.name] = True
+                    if queue not in self.queues_with_jobs:
+                        self.queues_with_jobs.push(queue)
                         self.HasScheduledTask.notify()
         elif isinstance(ref, SchedWatcher):
             if ref.Empty():
@@ -215,23 +239,55 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         return bool(self.UnsuccessfulBackupFilenameMatchRe.match(filename))
 
     @common.logged()
-    def RollBackup(self, force=False):
-        try:
-            if not os.path.isdir(self.backupDirectory):
-                os.makedirs(self.backupDirectory)
-            start_time = time.time()
-            self.tagRef.tag_logger.Rotate(start_time)
-            if not self.backupable and not force:
-                logging.warning("REM is currently not in backupable state; change it back to backupable as soon as possible")
-                return
-            self.SaveData(os.path.join(self.backupDirectory, "sched-%.0f.dump" % start_time))
-            backupFiles = sorted(filter(self.CheckBackupFilename, os.listdir(self.backupDirectory)), reverse=True)
-            unsuccessfulBackupFiles = filter(self.CheckUnsuccessfulBackupFilename, os.listdir(self.backupDirectory))
-            for filename in backupFiles[self.backupCount:] + unsuccessfulBackupFiles:
-                os.unlink(os.path.join(self.backupDirectory, filename))
-            self.tagRef.tag_logger.Clear(start_time)
-        except:
-            raise
+    def forgetOldItems(self):
+        for queue_name, queue in self.qRef.copy().iteritems():
+            queue.forgetOldItems()
+
+        self.binStorage.forgetOldItems()
+        self.tempStorage.forgetOldItems()
+        self.tagRef.tofileOldItems()
+
+    @common.logged()
+    def RollBackup(self, force=False, child_max_working_time=None):
+        child_max_working_time = child_max_working_time \
+            or self.context.backup_child_max_working_time
+
+        if not os.path.isdir(self.backupDirectory):
+            os.makedirs(self.backupDirectory)
+
+        self.forgetOldItems()
+        gc.collect() # for JobPacket -> Job -> JobPacket cyclic references
+
+        start_time = time.time()
+
+        self.tagRef.tag_logger.Rotate(start_time)
+
+        if not self.backupable and not force:
+            logging.warning("REM is currently not in backupable state; change it back to backupable as soon as possible")
+            return
+
+        def backup():
+            self.SaveBackup(os.path.join(self.backupDirectory, "sched-%.0f.dump" % start_time))
+
+        child = fork_locking.run_in_child(backup, child_max_working_time)
+
+        logging.debug("backup fork stats: %s", child.timings)
+
+        if child.errors:
+            logging.warning("Backup child process stderr: " + child.errors)
+
+        if child.term_status:
+            raise RuntimeError("Child process failed to write backup: %s" \
+                % osspec.repr_term_status(child.term_status))
+
+        backupFiles = sorted(filter(self.CheckBackupFilename, os.listdir(self.backupDirectory)), reverse=True)
+        unsuccessfulBackupFiles = filter(self.CheckUnsuccessfulBackupFilename, os.listdir(self.backupDirectory))
+        for filename in backupFiles[self.backupCount:] + unsuccessfulBackupFiles:
+            os.unlink(os.path.join(self.backupDirectory, filename))
+
+        self.tagRef.tag_logger.Clear(start_time)
+
+        return child.timings
 
     def SuspendBackups(self):
         self.backupable = False
@@ -242,22 +298,13 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def Serialize(self, out):
         import cPickle as pickle
 
-        sdict = {
-            "qRef": copy.copy(self.qRef),
-            "tagRef": self.tagRef,
-            "binStorage": self.binStorage,
-            "tempStorage": self.tempStorage,
-            "schedWatcher": self.schedWatcher,
-            "connManager": self.connManager
-        }
+        sdict = {k: getattr(self, k) for k in self.SerializableFields}
 
         p = pickle.Pickler(out, 2)
         p.dump(sdict)
 
-    def SaveData(self, filename):
+    def SaveBackup(self, filename):
         from cStringIO import StringIO
-
-        gc.collect()
 
         tmpFilename = filename + ".tmp"
         with open(tmpFilename, "w") as out:
@@ -283,7 +330,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
     def __reduce__(self):
         return nullobject, ()
 
-    def Deserialize(self, filename):
+    @classmethod
+    def Deserialize(cls, stream, additional_objects_registrator=FakeObjectRegistrator()):
         import packet
         import cPickle as pickle
 
@@ -300,37 +348,46 @@ class Scheduler(Unpickable(lock=PickableLock.create,
             def LogStats(self):
                 pass
 
+        packets_registrator = PacketsRegistrator()
+
+        common.ObjectRegistrator_ = objects_registrator \
+            = common.ObjectRegistratorsChain([
+                packets_registrator,
+                additional_objects_registrator
+            ])
+
+        unpickler = pickle.Unpickler(stream)
+
+        try:
+            sdict = unpickler.load()
+            assert isinstance(sdict, dict)
+        finally:
+            common.ObjectRegistrator_ = FakeObjectRegistrator()
+
+        sdict = {k: sdict[k] for k in cls.SerializableFields if k in sdict}
+
+        tagStorage = sdict['tagRef']
+        for pck in packets_registrator.packets:
+            pck.VivifyDoneTagsIfNeed(tagStorage)
+
+        objects_registrator.LogStats()
+
+        return sdict
+
+    def LoadBackup(self, filename):
         with self.lock:
             with open(filename, "r") as stream:
-                packets_registrator = PacketsRegistrator()
+                sdict = self.Deserialize(stream, self.ObjectRegistratorClass())
 
-                common.ObjectRegistrator_ = ObjectRegistrator_ \
-                    = common.ObjectRegistratorsChain([
-                        packets_registrator,
-                        self.ObjectRegistratorClass()
-                    ])
-
-                unpickler = pickle.Unpickler(stream)
-
-                sdict = unpickler.load()
-                assert isinstance(sdict, dict)
-
-            #update internal structures
             qRef = sdict.pop("qRef")
 
-            DiscardKey(sdict, 'qList')
             self.__setstate__(sdict)
+
             self.UpdateContext(None)
 
-            tagStorage = self.tagRef
-            tagStorage.Restore(self.ExtractTimestampFromBackupFilename(filename) or 0)
-            for pck in packets_registrator.packets:
-                pck.VivifyDoneTagsIfNeed(tagStorage)
+            self.tagRef.Restore(self.ExtractTimestampFromBackupFilename(filename) or 0)
 
             self.RegisterQueues(qRef)
-            #output objects statistics
-            ObjectRegistrator_.LogStats()
-            common.ObjectRegistrator_ = FakeObjectRegistrator()
 
     def RegisterQueues(self, qRef):
         for q in qRef.itervalues():
@@ -385,11 +442,8 @@ class Scheduler(Unpickable(lock=PickableLock.create,
         if q.IsAlive():
             q.Resume(resumeWorkable=True)
         self.qRef[q.name] = q
-        if q.HasStartableJobs():
-            self.qList.append(q)
-            self.in_deque[q.name] = True
-        else:
-            self.in_deque[q.name] = False
+        if q.HasStartableJobs() and q not in self.queues_with_jobs:
+            self.queues_with_jobs.push(q)
 
     def AddPacketToQueue(self, qname, pck):
         queue = self.Queue(qname)

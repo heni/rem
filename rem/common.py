@@ -6,7 +6,6 @@ import logging
 import os
 import shutil
 import tempfile
-import threading
 import time
 import types
 import re
@@ -15,6 +14,7 @@ from Queue import Queue as StdQueue
 from Queue import PriorityQueue as StdPriorityQueue
 import heapq
 
+import fork_locking
 from heap import PriorityQueue
 import osspec
 
@@ -213,12 +213,9 @@ class nullobject(object):
         pass
 
 
-class PickableLock(Unpickable(_object=threading.Lock)):
-    @classmethod
-    def create(cls, o=None):
-        if isinstance(o, cls):
-            return o
-        return cls()
+class PickableLock(object):
+    def __init__(self, rhs=None):
+        self._object = fork_locking.Lock()
 
     def __getattr__(self, attrname):
         return getattr(self._object, attrname)
@@ -230,15 +227,15 @@ class PickableLock(Unpickable(_object=threading.Lock)):
         return self._object.__exit__(*args)
 
     def __getstate__(self):
-        return {}
+        return None
+
+    def __setstate__(self, state):
+        pass
 
 
-class PickableRLock(Unpickable(_object=threading.RLock)):
-    @classmethod
-    def create(cls, o=None):
-        if isinstance(o, cls):
-            return o
-        return cls()
+class PickableRLock(object):
+    def __init__(self, rhs=None):
+        self._object = fork_locking.RLock()
 
     def __getattr__(self, attrname):
         return getattr(self._object, attrname)
@@ -250,7 +247,10 @@ class PickableRLock(Unpickable(_object=threading.RLock)):
         return self._object.__exit__(*args)
 
     def __getstate__(self):
-        return {}
+        return None
+
+    def __setstate__(self, state):
+        pass
 
 
 """Legacy structs for correct deserialization from old backups"""
@@ -425,7 +425,7 @@ class FuncRunner(object):
 
 class BinaryFile(Unpickable(
     links=dict,
-    lock=PickableRLock.create)):
+    lock=PickableRLock)):
     BUF_SIZE = 256 * 1024
 
     @classmethod

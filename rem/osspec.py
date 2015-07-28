@@ -7,9 +7,9 @@ import signal
 import stat
 import subprocess
 import sys
-import threading
 import time
 
+import fork_locking
 
 def should_execute_maker(max_tries=20, penalty_factor=5, *exception_list):
     exception_list = exception_list or []
@@ -37,7 +37,7 @@ def should_execute_maker(max_tries=20, penalty_factor=5, *exception_list):
 class Signals(object):
     def __init__(self):
         self.handlers = {signal.SIGINT: []}
-        self.lock = threading.Lock()
+        self.lock = fork_locking.Lock()
 
     def handler(self, signum, frame):
         self.lock.acquire()
@@ -148,3 +148,6 @@ def set_process_title(proc_title):
     except (ImportError, AttributeError):
         return False
 
+def repr_term_status(status):
+    return 'exit(%d)' % os.WEXITSTATUS(status) if os.WIFEXITED(status) \
+      else 'kill(%d)' % os.WTERMSIG(status)
