@@ -254,28 +254,31 @@ class Job(Unpickable(err=nullobject,
             self.FireEvent("done")
 
     def CloseStreams(self):
+        if self.output_to_status and self.output:
+            try:
+                if not self.output.closed:
+                    self.output.close()
+                if self.output.closed:
+                    try:
+                        self.output = open(self.output.name, 'r')
+                    except IOError:
+                        #packet probably was deleted and place released
+                        self.output = open('/dev/null', 'r')
+
+                if len(self.results):
+                    self.results[-1].message = self.results[-1].message or ""
+                    self.results[-1].message += '\nOutput:\n'
+                    self.results[-1].message += '-'*80
+                    self.results[-1].message += '\n'+'\n'.join(self.output.readlines())
+            except:
+                logging.exception("can't save jobs output")
+
         closingStreamGenerators = (
             lambda: self.input,
             lambda: self.output,
             lambda: self.errPipe[0] if self.errPipe else None,
             lambda: self.errPipe[1] if self.errPipe else None
         )
-        logging.debug('type of output: %s', type(self.output))
-        if self.output_to_status:
-            if not self.output.closed:
-                self.output.close()
-            if self.output.closed:
-                try:
-                    self.output = open(self.output.name, 'r')
-                except IOError:
-                    #packet probably was deleted and place released
-                    self.output = open('/dev/null', 'r')
-
-            if len(self.results):
-                self.results[-1].message = self.results[-1].message or ""
-                self.results[-1].message += '\nOutput:\n'
-                self.results[-1].message += '-'*80
-                self.results[-1].message += '\n'+'\n'.join(self.output.readlines())
 
         for fn in closingStreamGenerators:
             stream = fn()
