@@ -74,7 +74,7 @@ def CreateScheduler(context, canBeClear=False):
                     wasRestoreTry = True
     if wasRestoreTry and not canBeClear:
         raise RuntimeError("can't restore from backup")
-    return sched, None
+    return sched
 
 
 def readonly_method(func):
