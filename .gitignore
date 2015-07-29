@@ -1,5 +1,6 @@
 *.py[cod]
 rem.cfg
+network_topology.cfg
 *.dump
 *.db
 *.log*
