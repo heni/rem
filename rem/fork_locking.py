@@ -6,10 +6,15 @@ from sys import stderr
 import signal
 from collections import namedtuple
 
-if 'DUMMY_FORK_LOCKING' in os.environ:
-    import _dummy_fork_locking as _fork_locking
+__all__ = ["Lock", "RLock", "Condition", "LockWrapper", "RunningChildInfo", "TerminatedChildInfo", "run_in_child"]
+
+if 'DUMMY_FORK_LOCKING' not in os.environ:
+    try:
+        import _fork_locking
+    except ImportError:
+        import _dummy_fork_locking as _fork_locking
 else:
-    import _fork_locking
+    import _dummy_fork_locking as _fork_locking
 
 def acquire_lock(lock, blocking=True):
     if not blocking:
