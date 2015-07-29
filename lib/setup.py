@@ -11,9 +11,7 @@ def LoadMetadata():
 
 
 setup(
-    name="fork_locking",
-    #packages=["fork_locking"],
-    #package_dir={"fork_locking": "src/"},
+    name="_fork_locking",
     ext_modules=[Extension("_fork_locking", ["_fork_locking.c"])],
     **LoadMetadata()
 )
