@@ -285,7 +285,7 @@ class Scheduler(Unpickable(lock=PickableRLock,
         for filename in backupFiles[self.backupCount:] + unsuccessfulBackupFiles:
             os.unlink(os.path.join(self.backupDirectory, filename))
 
-        self.tagRef.tag_logger.Clear(start_time)
+        self.tagRef.tag_logger.Clear(start_time - self.context.journal_lifetime)
 
         return child.timings
 
