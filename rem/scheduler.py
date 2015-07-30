@@ -366,24 +366,24 @@ class Scheduler(Unpickable(lock=PickableRLock,
 
         sdict = {k: sdict[k] for k in cls.SerializableFields if k in sdict}
 
-        tagStorage = sdict['tagRef']
-        for pck in packets_registrator.packets:
-            pck.VivifyDoneTagsIfNeed(tagStorage)
-
         objects_registrator.LogStats()
 
-        return sdict
+        return sdict, packets_registrator.packets
 
     def LoadBackup(self, filename):
         with self.lock:
             with open(filename, "r") as stream:
-                sdict = self.Deserialize(stream, self.ObjectRegistratorClass())
+                sdict, packets = self.Deserialize(stream, self.ObjectRegistratorClass())
 
             qRef = sdict.pop("qRef")
 
             self.__setstate__(sdict)
 
             self.UpdateContext(None)
+
+            tagStorage = self.tagRef
+            for pck in packets:
+                pck.VivifyDoneTagsIfNeed(tagStorage)
 
             self.tagRef.Restore(self.ExtractTimestampFromBackupFilename(filename) or 0)
 
