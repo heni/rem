@@ -74,6 +74,7 @@ def CreateScheduler(context, canBeClear=False):
                     wasRestoreTry = True
     if wasRestoreTry and not canBeClear:
         raise RuntimeError("can't restore from backup")
+    sched.tagRef.Restore(0)
     return sched
 
 
