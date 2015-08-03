@@ -269,16 +269,19 @@ class Scheduler(Unpickable(lock=PickableRLock,
         def backup():
             self.SaveBackup(os.path.join(self.backupDirectory, "sched-%.0f.dump" % start_time))
 
-        child = fork_locking.run_in_child(backup, child_max_working_time)
+        if self.context.backup_in_child:
+            child = fork_locking.run_in_child(backup, child_max_working_time)
 
-        logging.debug("backup fork stats: %s", child.timings)
+            logging.debug("backup fork stats: %s", child.timings)
 
-        if child.errors:
-            logging.warning("Backup child process stderr: " + child.errors)
+            if child.errors:
+                logging.warning("Backup child process stderr: " + child.errors)
 
-        if child.term_status:
-            raise RuntimeError("Child process failed to write backup: %s" \
-                % osspec.repr_term_status(child.term_status))
+            if child.term_status:
+                raise RuntimeError("Child process failed to write backup: %s" \
+                    % osspec.repr_term_status(child.term_status))
+        else:
+            backup()
 
         backupFiles = sorted(filter(self.CheckBackupFilename, os.listdir(self.backupDirectory)), reverse=True)
         unsuccessfulBackupFiles = filter(self.CheckUnsuccessfulBackupFilename, os.listdir(self.backupDirectory))
@@ -286,8 +289,6 @@ class Scheduler(Unpickable(lock=PickableRLock,
             os.unlink(os.path.join(self.backupDirectory, filename))
 
         self.tagRef.tag_logger.Clear(start_time - self.context.journal_lifetime)
-
-        return child.timings
 
     def SuspendBackups(self):
         self.backupable = False
@@ -299,6 +300,7 @@ class Scheduler(Unpickable(lock=PickableRLock,
         import cPickle as pickle
 
         sdict = {k: getattr(self, k) for k in self.SerializableFields}
+        sdict['qRef'] = sdict['qRef'].copy()
 
         p = pickle.Pickler(out, 2)
         p.dump(sdict)
