@@ -44,6 +44,17 @@ class T06(unittest.TestCase):
         self.assertTrue(self.connector.Tag(tag0name).Check())
         self.assertTrue(self.connector.Tag(tag1name).Check())
 
+    def testSpecificBackups(self):
+        self.RestartService()
+        initialChildFlag = self.connector.proxy.get_backupable_state()["child-flag"]
+        logging.info("initialChildFlag value: %s", initialChildFlag)
+        self.connector.proxy.set_backupable_state(None, False)
+        self.connector.proxy.do_backup()
+        self.connector.proxy.set_backupable_state(None, True)
+        self.connector.proxy.do_backup()
+        self.RestartService()
+        self.assertEqual(self.connector.proxy.get_backupable_state()["child-flag"], initialChildFlag)
+
     def testTagsJournal(self):
         tagname = pckname = "lostpacket-%d" % self.timestamp
 

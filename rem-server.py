@@ -339,11 +339,23 @@ def queue_set_error_lifetime(queue_name, lifetime):
 
 
 @traced_rpc_method("warning")
-def set_backupable_state(bckpFlag):
-    if bckpFlag:
-        _scheduler.ResumeBackups()
-    else:
-        _scheduler.SuspendBackups()
+def set_backupable_state(bckpFlag, chldFlag=None):
+    if bckpFlag is not None:
+        if bckpFlag:
+            _scheduler.ResumeBackups()
+        else:
+            _scheduler.SuspendBackups()
+    if chldFlag is not None:
+        if chldFlag:
+            _scheduler.EnableBackupsInChild()
+        else:
+            _scheduler.DisableBackupsInChild()
+
+
+@traced_rpc_method()
+def get_backupable_state():
+    return {"backup-flag": _scheduler.backupable, "child-flag": _scheduler.backupInChild}
+
 
 @traced_rpc_method("warning")
 def do_backup():
@@ -406,6 +418,7 @@ class RemServer(object):
         self.register_function(queue_set_success_lifetime, "queue_set_success_lifetime")
         self.register_function(queue_set_error_lifetime, "queue_set_error_lifetime")
         self.register_function(set_backupable_state, "set_backupable_state")
+        self.register_function(get_backupable_state, "get_backupable_state")
         if self.allow_backup_method:
             self.register_function(do_backup, "do_backup")
 
