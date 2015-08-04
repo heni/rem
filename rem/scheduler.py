@@ -11,6 +11,8 @@ import sys
 from common import PickableStdQueue, PickableStdPriorityQueue
 import common
 from Queue import Empty
+import cStringIO
+import StringIO
 
 import fork_locking
 from job import FuncJob, FuncRunner
@@ -266,19 +268,25 @@ class Scheduler(Unpickable(lock=PickableRLock,
             logging.warning("REM is currently not in backupable state; change it back to backupable as soon as possible")
             return
 
-        def backup():
-            self.SaveBackup(os.path.join(self.backupDirectory, "sched-%.0f.dump" % start_time))
+        def backup(fast_strings):
+            self.SaveBackup(
+                os.path.join(self.backupDirectory, "sched-%.0f.dump" % start_time),
+                cStringIO.StringIO if fast_strings else StringIO.StringIO
+            )
 
-        child = fork_locking.run_in_child(backup, child_max_working_time)
+        if self.context.backup_in_child:
+            child = fork_locking.run_in_child(lambda : backup(True), child_max_working_time)
 
-        logging.debug("backup fork stats: %s", child.timings)
+            logging.debug("backup fork stats: %s", child.timings)
 
-        if child.errors:
-            logging.warning("Backup child process stderr: " + child.errors)
+            if child.errors:
+                logging.warning("Backup child process stderr: " + child.errors)
 
-        if child.term_status:
-            raise RuntimeError("Child process failed to write backup: %s" \
-                % osspec.repr_term_status(child.term_status))
+            if child.term_status:
+                raise RuntimeError("Child process failed to write backup: %s" \
+                    % osspec.repr_term_status(child.term_status))
+        else:
+            backup(False)
 
         backupFiles = sorted(filter(self.CheckBackupFilename, os.listdir(self.backupDirectory)), reverse=True)
         unsuccessfulBackupFiles = filter(self.CheckUnsuccessfulBackupFilename, os.listdir(self.backupDirectory))
@@ -286,8 +294,6 @@ class Scheduler(Unpickable(lock=PickableRLock,
             os.unlink(os.path.join(self.backupDirectory, filename))
 
         self.tagRef.tag_logger.Clear(start_time - self.context.journal_lifetime)
-
-        return child.timings
 
     def SuspendBackups(self):
         self.backupable = False
@@ -299,16 +305,15 @@ class Scheduler(Unpickable(lock=PickableRLock,
         import cPickle as pickle
 
         sdict = {k: getattr(self, k) for k in self.SerializableFields}
+        sdict['qRef'] = sdict['qRef'].copy()
 
         p = pickle.Pickler(out, 2)
         p.dump(sdict)
 
-    def SaveBackup(self, filename):
-        from cStringIO import StringIO
-
+    def SaveBackup(self, filename, string_cls=StringIO.StringIO):
         tmpFilename = filename + ".tmp"
         with open(tmpFilename, "w") as out:
-            mem_out = StringIO()
+            mem_out = string_cls()
             try:
                 self.Serialize(mem_out)
                 out.write(mem_out.getvalue())

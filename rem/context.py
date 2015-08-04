@@ -68,6 +68,7 @@ class Context(object):
         self.backup_directory = self.prep_dir(config.get("store", "backup_dir"))
         self.backup_period = config.getint("store", "backup_period")
         self.backup_count = config.getint("store", "backup_count")
+        self.backup_in_child = config.safe_getboolean("store", "backup_in_child", False)
         self.backup_child_max_working_time = config.getint("store", "backup_child_max_working_time")
         self.journal_lifetime = config.getint("store", "journal_lifetime")
         self.binary_directory = self.prep_dir(config.get("store", "binary_dir"))

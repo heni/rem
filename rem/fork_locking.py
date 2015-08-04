@@ -4,6 +4,7 @@ import time
 import sys
 from sys import stderr
 import signal
+import errno
 from collections import namedtuple
 
 __all__ = ["Lock", "RLock", "Condition", "LockWrapper", "RunningChildInfo", "TerminatedChildInfo", "run_in_child"]
@@ -168,6 +169,13 @@ def run_in_child(func, child_max_working_time=None):
     with child.stderr:
         errors = child.stderr.read()
 
-    _, status = os.waitpid(child.pid, 0)
+    while True:
+        try:
+            _, status = os.waitpid(child.pid, 0)
+        except OSError as e:
+            if e.errno != errno.EINTR:
+                raise
+        else:
+            break
 
     return TerminatedChildInfo(status, errors, child.timings)
