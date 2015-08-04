@@ -1,5 +1,4 @@
 from __future__ import with_statement
-import copy
 import shutil
 import time
 import logging
@@ -7,7 +6,6 @@ import os
 import re
 from collections import deque
 import gc
-import sys
 from common import PickableStdQueue, PickableStdPriorityQueue
 import common
 from Queue import Empty
@@ -16,12 +14,12 @@ import StringIO
 
 import fork_locking
 from job import FuncJob, FuncRunner
-from common import Unpickable, TimedSet, PickableLock, PickableRLock, FakeObjectRegistrator, ObjectRegistrator, nullobject, DiscardKey
+from common import Unpickable, PickableLock, PickableRLock, FakeObjectRegistrator, ObjectRegistrator, nullobject
 from rem import PacketCustomLogic
 from connmanager import ConnectionManager
 from packet import JobPacket, PacketState, PacketFlag
 from queue import Queue
-from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage, MessageStorage
+from storages import PacketNamesStorage, TagStorage, ShortStorage, BinaryStorage, GlobalPacketStorage
 from callbacks import ICallbackAcceptor, CallbackHolder
 import osspec
 
@@ -161,6 +159,7 @@ class Scheduler(Unpickable(lock=PickableRLock,
         self.backupPeriod = context.backup_period
         self.backupDirectory = context.backup_directory
         self.backupCount = context.backup_count
+        self.backupInChild = context.backup_in_child
 
     def initProfiler(self):
         import guppy
@@ -274,7 +273,7 @@ class Scheduler(Unpickable(lock=PickableRLock,
                 cStringIO.StringIO if fast_strings else StringIO.StringIO
             )
 
-        if self.context.backup_in_child:
+        if self.backupInChild:
             child = fork_locking.run_in_child(lambda : backup(True), child_max_working_time)
 
             logging.debug("backup fork stats: %s", child.timings)
@@ -300,6 +299,12 @@ class Scheduler(Unpickable(lock=PickableRLock,
 
     def ResumeBackups(self):
         self.backupable = True
+
+    def DisableBackupsInChild(self):
+        self.backupInChild = False
+
+    def EnableBackupsInChild(self):
+        self.backupInChild = True
 
     def Serialize(self, out):
         import cPickle as pickle

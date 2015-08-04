@@ -35,13 +35,11 @@ def logged(log_args=False, level="debug"):
             log('started')
             try:
                 ret = func(*args, **kwargs)
-            except Exception as e:
-                log('failed: %s' % e)
-                raise
-            else:
                 log('finished')
-
-            return ret
+                return ret
+            except:
+                logging.exception('%s call failed', prefix)
+                raise
         return inner
     return inner
 

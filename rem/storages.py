@@ -250,7 +250,7 @@ class TagStorage(object):
             return tag
 
     def ListTags(self, name_regex=None, prefix=None, memory_only=True):
-        for name, tag in self.inmem_items.iteritems():
+        for name, tag in self.inmem_items.items():
             if name and (not prefix or name.startswith(prefix)) \
                 and (not name_regex or name_regex.match(name)):
                 yield name, tag.IsSet()
