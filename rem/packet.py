@@ -313,10 +313,10 @@ class JobPacket(Unpickable(lock=PickableRLock,
         self.notify_emails = list(notify_emails)
         self.id = os.path.split(self.directory)[-1]
         self.history.append((self.state, time.time()))
-        self.SetWaitingTags(wait_tags)
-        self.done_indicator = set_tag
         self.kill_all_jobs_on_error = kill_all_jobs_on_error
         self.isResetable = isResetable
+        self.done_indicator = set_tag
+        self.SetWaitingTags(wait_tags)
 
     def __getstate__(self):
         sdict = CallbackHolder.__getstate__(self)
