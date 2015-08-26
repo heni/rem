@@ -7,8 +7,8 @@
 #include <Python.h>
 
 #if defined(__clang__)
-  #define POD_THREAD(T) thread_local T
-  #define POD_STATIC_THREAD(T) static thread_local T
+  #define POD_THREAD(T) __thread T
+  #define POD_STATIC_THREAD(T) static __thread T
 #elif defined __GNUC__ && (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ > 2)) && !(defined __FreeBSD__ && __FreeBSD__ < 5) && !defined(_cygwin_) && !defined(_arm_) && !defined(__IOS_SIMULATOR__)
   #define POD_THREAD(T) __thread T
   #define POD_STATIC_THREAD(T) static __thread T
