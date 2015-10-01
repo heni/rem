@@ -95,10 +95,11 @@ class Queue(Unpickable(pending=PackSet.create,
                     logging.warning("packet %r is in several queues", pck)
                 src_queue = queue
         if src_queue != dest_queue:
-            if src_queue is not None:
-                with self.lock: src_queue.remove(pck)
-            if dest_queue is not None:
-                with self.lock: dest_queue.add(pck)
+            with self.lock:
+                if src_queue is not None:
+                    src_queue.remove(pck)
+                if dest_queue is not None:
+                    dest_queue.add(pck)
             if pck.state == PacketState.PENDING:
                 self.FireEvent("task_pending")
             if pck.state == PacketState.NONINITIALIZED:
@@ -148,7 +149,7 @@ class Queue(Unpickable(pending=PackSet.create,
         with self.lock:
             while self.noninitialized:
                 pck = self.noninitialized.pop()
-                context.Scheduler.ScheduleTask(0, self.RestoreNoninitialized, pck, context)
+                context.Scheduler.ScheduleTaskT(0, self.RestoreNoninitialized, pck, context)
 
     def Get(self, context):
         pckIncorrect = None

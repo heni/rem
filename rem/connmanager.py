@@ -154,7 +154,7 @@ class ConnectionManager(Unpickable(topologyInfo=TopologyInfo,
         self.InitXMLRPCServer()
         threading.Thread(target=self.ServerLoop).start()
         for client in self.topologyInfo.servers.values():
-            self.scheduler.ScheduleTask(0, self.SendData, client, skip_logging=True)
+            self.scheduler.ScheduleTaskT(0, self.SendData, client, skip_logging=True)
 
     def Stop(self):
         self.alive = False
@@ -192,7 +192,7 @@ class ConnectionManager(Unpickable(topologyInfo=TopologyInfo,
             except Exception as e:
                 logging.error("SendData to %s: failed: %s", client.name, e)
         if hasattr(self, "scheduler"):
-            self.scheduler.ScheduleTask(
+            self.scheduler.ScheduleTaskT(
                 min(client.PENALTY_FACTOR ** client.errorsCnt, self.max_remotetags_resend_delay),
                 self.SendData,
                 client,
@@ -228,7 +228,7 @@ class ConnectionManager(Unpickable(topologyInfo=TopologyInfo,
         new_servers -= old_servers
         if self.alive:
             for client in new_servers:
-                self.scheduler.ScheduleTask(0, self.SendData, self.topologyInfo.servers[client], skip_logging=True)
+                self.scheduler.ScheduleTaskT(0, self.SendData, self.topologyInfo.servers[client], skip_logging=True)
 
     def GetTagAcceptors(self, tagname):
         if self.acceptors.has_key(tagname):
