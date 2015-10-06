@@ -4,6 +4,7 @@ import tempfile
 import os
 import time
 import shutil
+import errno
 
 from callbacks import CallbackHolder, ICallbackAcceptor, Tag, tagset
 from common import BinaryFile, PickableRLock, SendEmail, Unpickable, safeStringEncode
@@ -150,7 +151,14 @@ class JobPacketImpl(object):
         while tmpLinks:
             binname, file = tmpLinks.popitem()
             if isinstance(file, BinaryFile):
-                file.Unlink(self, binname)
+                # until race condition in changeState will be fixed
+                try:
+                    file.Unlink(self, binname)
+                except OSError as e:
+                    if e.errno == errno.ENOENT:
+                        logging.error("Packet %s release place error: %s", self.id, e)
+                    else:
+                        raise
                 filehash = file.checksum
             elif isinstance(file, str):
                 filehash = file
