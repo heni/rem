@@ -106,6 +106,8 @@ def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
                 max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
+        if isinstance(shell, unicode):
+            shell = shell.encode('utf-8')
         parents = [pck.jobs[int(jid)] for jid in parents]
         pipe_parents = [pck.jobs[int(jid)] for jid in pipe_parents]
         job = pck.Add(shell, parents, pipe_parents, _scheduler.tagRef.AcquireTag(set_tag), tries, \
