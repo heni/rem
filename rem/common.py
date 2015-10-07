@@ -193,10 +193,15 @@ def emptyset(*args):
 def zeroint(*args):
     return int()
 
+
 def safeint(oth=None):
     if not isinstance(oth, int):
         return int()
     return int(oth)
+
+
+def to_utf8string_if_need(s):
+    return s.encode("utf-8") is isinstance(s, unicode) else str(s)
 
 
 class nullobject(object):
@@ -526,3 +531,10 @@ def SendEmail(emails, msg_helper):
 def DiscardKey(d, key):
     if key in d:
         del d[key]
+
+
+def CheckRequiredType(value, tpDesc, attrName=None):
+    if not isinstance(value, tpDesc):
+        if attrName:
+            raise AttributeError("attribute '%s' doesn't require type restrictions" % attrName)
+        raise AttributeError("attribute doesn't require type restrictions")

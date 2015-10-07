@@ -14,8 +14,7 @@ import Queue as StdQueue
 import xmlrpclib
 import datetime
 
-from rem import constants, osspec
-from rem import traced_rpc_method
+from rem import constants, osspec, common
 from rem import CheckEmailAddress, DefaultContext, JobPacket, PacketState, Scheduler, ThreadJobWorker, TimeTicker, XMLRPCWorker
 
 class DuplicatePackageNameException(Exception):
@@ -83,7 +82,7 @@ def readonly_method(func):
     return func
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY, resetable=True):
     if packet_name_policy & constants.DENY_DUPLICATE_NAMES_POLICY and _scheduler.packetNamesTracker.Exist(packet_name):
         ex = DuplicatePackageNameException(packet_name, _context.network_name)
@@ -101,9 +100,10 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     return pck.id
 
 
-@traced_rpc_method()
+@common.traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
                 max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
+    shell = common.to_utf8string_if_need(shell)
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
         if isinstance(shell, unicode):
@@ -116,7 +116,7 @@ def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def pck_addto_queue(pck_id, queue_name, packet_name_policy=constants.IGNORE_DUPLICATE_NAMES_POLICY):
     pck = _scheduler.tempStorage.PickPacket(pck_id)
     packet_name = pck.name
@@ -129,7 +129,7 @@ def pck_addto_queue(pck_id, queue_name, packet_name_policy=constants.IGNORE_DUPL
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def pck_moveto_queue(pck_id, src_queue, dst_queue):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -142,52 +142,52 @@ def pck_moveto_queue(pck_id, src_queue, dst_queue):
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def check_tag(tagname):
     return _scheduler.tagRef.CheckTag(tagname)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def set_tag(tagname):
     return _scheduler.tagRef.SetTag(tagname)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def unset_tag(tagname):
     return _scheduler.tagRef.UnsetTag(tagname)
 
 
-@traced_rpc_method()
+@common.traced_rpc_method()
 def reset_tag(tagname, message=""):
     tag = _scheduler.tagRef.AcquireTag(tagname)
     tag.Reset(message)
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def get_dependent_packets_for_tag(tagname):
     return _scheduler.tagRef.ListDependentPackets(tagname)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def queue_suspend(queue_name):
     _scheduler.Queue(queue_name).Suspend()
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def queue_resume(queue_name):
     _scheduler.Queue(queue_name).Resume()
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def queue_status(queue_name):
     q = _scheduler.Queue(queue_name, create=False)
     return q.Status()
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def queue_list(queue_name, filter, name_regex=None, prefix=None):
     name_regex = name_regex and re.compile(name_regex)
     q = _scheduler.Queue(queue_name, create=False)
@@ -195,31 +195,31 @@ def queue_list(queue_name, filter, name_regex=None, prefix=None):
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def queue_list_updated(queue_name, last_modified, filter=None):
     q = _scheduler.Queue(queue_name, create=False)
     return [pck.id for pck in q.ListPackets(last_modified=last_modified, filter=filter)]
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def queue_change_limit(queue_name, limit):
     _scheduler.Queue(queue_name).ChangeWorkingLimit(limit)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def queue_delete(queue_name):
     return _scheduler.DeleteUnusedQueue(queue_name)
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def list_tags(name_regex=None, prefix=None, memory_only=True):
     name_regex = name_regex and re.compile(name_regex)
     return list(set(_scheduler.tagRef.ListTags(name_regex, prefix, memory_only)))
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def list_queues(name_regex=None, prefix=None, *args):
     name_regex = name_regex and re.compile(name_regex)
     return [(q.name, q.Status()) for q in _scheduler.qRef.itervalues()
@@ -228,13 +228,13 @@ def list_queues(name_regex=None, prefix=None, *args):
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def list_schedule(*args):
     return _scheduler.schedWatcher.ListTasks()
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def pck_status(pck_id):
     pck = _scheduler.GetPacket(pck_id) or _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
@@ -242,7 +242,7 @@ def pck_status(pck_id):
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def pck_suspend(pck_id, kill_jobs=False):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -250,7 +250,7 @@ def pck_suspend(pck_id, kill_jobs=False):
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def pck_resume(pck_id):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -258,7 +258,7 @@ def pck_resume(pck_id):
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def pck_delete(pck_id):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -268,7 +268,7 @@ def pck_delete(pck_id):
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def pck_reset(pck_id):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -279,17 +279,17 @@ def pck_reset(pck_id):
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method()
+@common.traced_rpc_method()
 def check_binary_exist(checksum):
     return _scheduler.binStorage.HasBinary(checksum)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def save_binary(bindata):
     _scheduler.binStorage.CreateFile(bindata.data)
 
 
-@traced_rpc_method("info")
+@common.traced_rpc_method("info")
 def check_binary_and_lock(checksum, localPath, tryLock=None):
     if tryLock is None:
         return _scheduler.binStorage.HasBinary(checksum) \
@@ -298,7 +298,7 @@ def check_binary_and_lock(checksum, localPath, tryLock=None):
         raise NotImplementedError('tryLock==True branch is not implemented yet!')
 
 
-@traced_rpc_method()
+@common.traced_rpc_method()
 def pck_add_binary(pck_id, binname, checksum):
     pck = _scheduler.tempStorage.GetPacket(pck_id) or _scheduler.GetPacket(pck_id)
     file = _scheduler.binStorage.GetFileByHash(checksum)
@@ -309,7 +309,7 @@ def pck_add_binary(pck_id, binname, checksum):
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def pck_list_files(pck_id):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -319,7 +319,7 @@ def pck_list_files(pck_id):
 
 
 @readonly_method
-@traced_rpc_method()
+@common.traced_rpc_method()
 def pck_get_file(pck_id, filename):
     pck = _scheduler.GetPacket(pck_id)
     if pck is not None:
@@ -328,19 +328,19 @@ def pck_get_file(pck_id, filename):
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
 
-@traced_rpc_method()
+@common.traced_rpc_method()
 def queue_set_success_lifetime(queue_name, lifetime):
     q = _scheduler.Queue(queue_name, create=False)
     q.SetSuccessLifeTime(lifetime)
 
 
-@traced_rpc_method()
+@common.traced_rpc_method()
 def queue_set_error_lifetime(queue_name, lifetime):
     q = _scheduler.Queue(queue_name, create=False)
     q.SetErroredLifeTime(lifetime)
 
 
-@traced_rpc_method("warning")
+@common.traced_rpc_method("warning")
 def set_backupable_state(bckpFlag, chldFlag=None):
     if bckpFlag is not None:
         if bckpFlag:
@@ -354,12 +354,12 @@ def set_backupable_state(bckpFlag, chldFlag=None):
             _scheduler.DisableBackupsInChild()
 
 
-@traced_rpc_method()
+@common.traced_rpc_method()
 def get_backupable_state():
     return {"backup-flag": _scheduler.backupable, "child-flag": _scheduler.backupInChild}
 
 
-@traced_rpc_method("warning")
+@common.traced_rpc_method("warning")
 def do_backup():
     return _scheduler.RollBackup(force=True, child_max_working_time=None)
 
