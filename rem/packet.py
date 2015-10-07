@@ -292,7 +292,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
                            leafs=set,
                            working=set,
                            waitTags=set,
-                           waitingTime=int,
+                           waitingDeadline=int,
                            state=(str, PacketState.CREATED),
                            history=(list, []),
                            notify_emails=(list, []),
@@ -328,6 +328,8 @@ class JobPacket(Unpickable(lock=PickableRLock,
         for job_id, tag in job_done_indicator.iteritems():
             job_done_indicator[job_id] = tag.name
 
+        sdict.pop('waitingTime', None) # obsolete
+
         return sdict
 
     def Init(self, context):
@@ -335,7 +337,6 @@ class JobPacket(Unpickable(lock=PickableRLock,
         self.result = None
         if not getattr(self, "directory", None):
             self.CreatePlace(context)
-        self.waitingTime = 0
         self.changeState(PacketState.CREATED)
 
     def __repr__(self):
@@ -387,7 +388,8 @@ class JobPacket(Unpickable(lock=PickableRLock,
         return state in PacketState.allowed[self.state]
 
     def stopWaiting(self):
-        self.changeState(PacketState.PENDING)
+        if self.state == PacketState.WAITING:
+            self.changeState(PacketState.PENDING)
 
     def changeState(self, state):
         if state == self.state:
@@ -426,8 +428,8 @@ class JobPacket(Unpickable(lock=PickableRLock,
                 with self.lock:
                     nState, nTimeout, isStopped = self.ProcessJobDone(ref)
                 if nState:
-                    if nState == PacketState.WAITING and nTimeout:
-                        self.waitingTime = nTimeout
+                    if nState == PacketState.WAITING:
+                        self.waitingDeadline = time.time() + nTimeout
                     self.changeState(nState)
         elif isinstance(ref, Tag):
             self.ProcessTagEvent(ref)
@@ -532,7 +534,9 @@ class JobPacket(Unpickable(lock=PickableRLock,
                 wait_time += end_time - start_time
 
         result_tag = self.done_indicator.name if self.done_indicator else None
-        waiting_time = self.waitingTime if self.state == PacketState.WAITING else None
+
+        waiting_time = max(int(self.waitingDeadline - time.time()), 0) \
+            if self.state == PacketState.WAITING else None
 
         all_tags = list(getattr(self, 'allTags', []))
 

@@ -11,6 +11,7 @@ import common
 from Queue import Empty
 import cStringIO
 import StringIO
+import itertools
 
 import fork_locking
 from job import FuncJob, FuncRunner
@@ -41,14 +42,17 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
                     self.workingQueue.put(runner)
                     self.FireEvent("task_pending")
 
-    def AddTask(self, runtm, fn, *args, **kws):
+    def AddTaskD(self, deadline, fn, *args, **kws):
         if "skip_logging" in kws:
             skipLoggingFlag = bool(kws.pop("skip_logging"))
         else:
             skipLoggingFlag = False
         if not skipLoggingFlag:
-            logging.debug("new task %r scheduled on %s", fn, time.ctime(time.time() + runtm))
-        self.tasks.put((runtm + time.time(), (FuncRunner(fn, args, kws))))
+            logging.debug("new task %r scheduled on %s", fn, time.ctime(deadline))
+        self.tasks.put((deadline, (FuncRunner(fn, args, kws))))
+
+    def AddTaskT(self, timeout, fn, *args, **kws):
+        self.AddTaskD(time.time() + timeout, fn, *args, **kws)
 
     def GetTask(self):
         if not self.workingQueue.empty():
@@ -76,8 +80,8 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
         return task_lst
 
     def __getstate__(self):
-        sdict = self.__dict__.copy()
-        return getattr(super(SchedWatcher, self), "__getstate__", lambda: sdict)()
+        # SchedWatcher can be unpickled for compatibility, but not pickled
+        return {}
 
 class QueueList(object):
     __slots__ = ['__list', '__exists']
@@ -129,7 +133,7 @@ class Scheduler(Unpickable(lock=PickableRLock,
                 ICallbackAcceptor):
     BackupFilenameMatchRe = re.compile("sched-(\d+).dump$")
     UnsuccessfulBackupFilenameMatchRe = re.compile("sched-\d*.dump.tmp$")
-    SerializableFields = ["qRef", "tagRef", "binStorage", "tempStorage", "schedWatcher", "connManager"]
+    SerializableFields = ["qRef", "tagRef", "binStorage", "tempStorage", "connManager"]
 
     def __init__(self, context):
         getattr(super(Scheduler, self), "__init__")()
@@ -153,7 +157,7 @@ class Scheduler(Unpickable(lock=PickableRLock,
 
     def OnWaitingStart(self, ref):
         if isinstance(ref, JobPacket):
-            self.ScheduleTask(ref.waitingTime, ref.stopWaiting)
+            self.ScheduleTaskD(ref.waitingDeadline, ref.stopWaiting)
 
     def initBackupSystem(self, context):
         self.backupPeriod = context.backup_period
@@ -374,7 +378,7 @@ class Scheduler(Unpickable(lock=PickableRLock,
         finally:
             common.ObjectRegistrator_ = FakeObjectRegistrator()
 
-        sdict = {k: sdict[k] for k in cls.SerializableFields if k in sdict}
+        sdict = {k: sdict[k] for k in cls.SerializableFields + ['schedWatcher'] if k in sdict}
 
         objects_registrator.LogStats()
 
@@ -386,6 +390,7 @@ class Scheduler(Unpickable(lock=PickableRLock,
                 sdict, packets = self.Deserialize(stream, self.ObjectRegistratorClass())
 
             qRef = sdict.pop("qRef")
+            prevWatcher = sdict.pop("schedWatcher", None)
 
             self.__setstate__(sdict)
 
@@ -398,6 +403,34 @@ class Scheduler(Unpickable(lock=PickableRLock,
             self.tagRef.Restore(self.ExtractTimestampFromBackupFilename(filename) or 0)
 
             self.RegisterQueues(qRef)
+
+            self.FillSchedWatcher(prevWatcher)
+
+    def FillSchedWatcher(self, prevWatcher=None):
+        packets = [
+            pck for q in self.qRef.itervalues()
+                for pck in q.ListAllPackets()
+                    if pck.state == PacketState.WAITING
+        ]
+
+        prevDeadlines = {
+            task.object.id: deadline
+                for deadline, task in itertools.chain(
+                    prevWatcher.tasks.queue,
+                    prevWatcher.workingQueue.queue
+                )
+                    if task.object \
+                        and isinstance(task.object, JobPacket) \
+                        and task.methName == 'stopWaiting'
+        } \
+            if prevWatcher else {}
+
+        for pck in packets:
+            pck.waitingDeadline = pck.waitingDeadline \
+                or prevDeadlines.get(pck.id, None) \
+                or time.time() # missed in old backup
+
+            self.ScheduleTaskD(pck.waitingDeadline, pck.stopWaiting)
 
     def RegisterQueues(self, qRef):
         for q in qRef.itervalues():
@@ -470,8 +503,11 @@ class Scheduler(Unpickable(lock=PickableRLock,
     def GetPacket(self, pck_id):
         return self.packStorage.GetPacket(pck_id)
 
-    def ScheduleTask(self, runtm, fn, *args, **kws):
-        self.schedWatcher.AddTask(runtm, fn, *args, **kws)
+    def ScheduleTaskD(self, deadline, fn, *args, **kws):
+        self.schedWatcher.AddTaskD(deadline, fn, *args, **kws)
+
+    def ScheduleTaskT(self, timeout, fn, *args, **kws):
+        self.schedWatcher.AddTaskT(timeout, fn, *args, **kws)
 
     def Start(self):
         with self.lock:

@@ -479,19 +479,15 @@ class RemDaemon(object):
         logging.warning("rem-server\tsignal %s has gotten", signum)
         if self.scheduler.alive:
             self.permitFinalBackup = False
-            #stop xmlrpc responders and timer
             for server in self.api_servers:
                 server.stop()
             if self.timeWorker:
                 self.timeWorker.Kill()
-                # stop scheduler
             self.scheduler.Stop()
-            #suspend workers before killing them (to avoid restarting of killed pids)
-            map(lambda worker: worker.Suspend(), self.regWorkers)
-            #allow start final backup
+            for method in [ThreadJobWorker.Suspend, ThreadJobWorker.Kill, ThreadJobWorker.join]:
+                for worker in self.regWorkers:
+                    method(worker)
             self.permitFinalBackup = True
-            #kill running tasks
-            map(lambda worker: worker.Kill(), self.regWorkers)
             import multiprocessing
             logging.debug("%s children founded after custom kill", len(multiprocessing.active_children()))
             for proc in multiprocessing.active_children():
@@ -510,22 +506,18 @@ class RemDaemon(object):
             worker.start()
 
     def start(self):
-        #register signal handlers
         osspec.reg_signal_handler(signal.SIGINT, self.signal_handler)
         osspec.reg_signal_handler(signal.SIGTERM, self.signal_handler)
 
-        #start regular workers
         self.start_workers()
 
-        #start xmlrpc server
         for server in self.api_servers:
             server.start()
-            #main cycle for backups
 
         logging.debug("rem-server\tall_started")
 
         self.process_backups()
-        #final backup
+
         while not self.permitFinalBackup:
             time.sleep(0.01)
 
