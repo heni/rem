@@ -526,3 +526,10 @@ def SendEmail(emails, msg_helper):
 def DiscardKey(d, key):
     if key in d:
         del d[key]
+
+
+def CheckRequiredType(value, tpDesc, attrName=None):
+    if not isinstance(value, tpDesc):
+        if attrName:
+            raise AttributeError("attribute '%s' doesn't require type restrictions" % attrName)
+        raise AttributeError("attribute doesn't require type restrictions")
