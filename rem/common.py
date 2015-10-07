@@ -193,10 +193,15 @@ def emptyset(*args):
 def zeroint(*args):
     return int()
 
+
 def safeint(oth=None):
     if not isinstance(oth, int):
         return int()
     return int(oth)
+
+
+def to_utf8string_if_need(s):
+    return s.encode("utf-8") is isinstance(s, unicode) else str(s)
 
 
 class nullobject(object):
