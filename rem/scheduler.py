@@ -404,8 +404,6 @@ class Scheduler(Unpickable(lock=PickableRLock,
             qRef = sdict.pop("qRef")
             prevWatcher = sdict.pop("schedWatcher", None) # from old backups
 
-            self.prevWatcher = prevWatcher
-
             self.__setstate__(sdict)
 
             self.UpdateContext(None)
