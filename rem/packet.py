@@ -4,6 +4,7 @@ import tempfile
 import os
 import time
 import shutil
+import errno
 
 from callbacks import CallbackHolder, ICallbackAcceptor, Tag, tagset
 from common import BinaryFile, PickableRLock, SendEmail, Unpickable, safeStringEncode
@@ -150,7 +151,14 @@ class JobPacketImpl(object):
         while tmpLinks:
             binname, file = tmpLinks.popitem()
             if isinstance(file, BinaryFile):
-                file.Unlink(self, binname)
+                # until race condition in changeState will be fixed
+                try:
+                    file.Unlink(self, binname)
+                except OSError as e:
+                    if e.errno == errno.ENOENT:
+                        logging.exception("Packet %s release place error", self.id)
+                    else:
+                        raise
                 filehash = file.checksum
             elif isinstance(file, str):
                 filehash = file
@@ -196,7 +204,7 @@ class JobPacketImpl(object):
             try:
                 shutil.rmtree(self.directory, onerror=None)
             except Exception, e:
-                logging.error("Packet %s release place error: %s", self.id, e)
+                logging.exception("Packet %s release place error", self.id)
         self.directory = None
         self.streams.clear()
 
@@ -227,7 +235,7 @@ class JobPacketImpl(object):
             try:
                 files = os.listdir(self.directory)
             except Exception, e:
-                logging.exception("directory %s listing error: %s", self.directory, e)
+                logging.exception("directory %s listing error", self.directory)
         return files
 
     def GetFile(self, filename):
