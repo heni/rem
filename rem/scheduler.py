@@ -419,13 +419,6 @@ class Scheduler(Unpickable(lock=PickableRLock,
             self.schedWatcher.Clear() # remove tasks from Queue.relocatePacket
             self.FillSchedWatcher(prevWatcher)
 
-    def ListPackets(self, state):
-        return (
-            pck for q in self.qRef.itervalues()
-                for pck in q.ListAllPackets()
-                    if pck.state == state
-        )
-
     def FillSchedWatcher(self, prev_watcher=None):
         def list_packets_in_queues(state):
             return [
