@@ -9,6 +9,7 @@ from callbacks import CallbackHolder, ICallbackAcceptor, Tag, tagset
 from common import BinaryFile, PickableRLock, SendEmail, Unpickable, safeStringEncode
 from job import Job, PackedExecuteResult
 import osspec
+import fork_locking
 
 class PacketState(object):
     CREATED = "CREATED"                 #created only packet
@@ -266,7 +267,7 @@ class JobPacketImpl(object):
             return
         with self.lock:
             if not self._working_empty:
-                self._working_empty = Condition(self.lock)
+                self._working_empty = fork_locking.Condition(self.lock)
             if not self.working:
                 self._working_empty.wait()
             self._working_empty = None
