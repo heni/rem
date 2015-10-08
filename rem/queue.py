@@ -102,8 +102,9 @@ class Queue(Unpickable(pending=PackSet.create,
                     dest_queue.add(pck)
             if pck.state == PacketState.PENDING:
                 self.FireEvent("task_pending")
-            if pck.state == PacketState.NONINITIALIZED:
-                self.FireEvent("packet_noninitialized", pck)
+
+    def OnPacketReinitRequest(self, pck):
+        self.FireEvent('packet_reinit_request', pck)
 
     def OnPendingPacket(self, ref):
         self.FireEvent("task_pending")
