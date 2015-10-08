@@ -75,9 +75,21 @@ class SchedWatcher(Unpickable(tasks=PickableStdPriorityQueue.create,
         self.AddNonpersistentCallbackListener(context.Scheduler)
 
     def ListTasks(self):
-        task_lst = [(str(o), tm) for o, tm in self.tasks.queue]
-        task_lst += [(str(o), None) for o, tm in self.workingQueue.queue]
-        return task_lst
+        with self.lock:
+            return list(self.tasks.queue) \
+                 + [(None, task) for task in list(self.workingQueue.queue)]
+
+    def Clear(self):
+        with self.lock:
+            self.workingQueue.queue.clear()
+            self.tasks.queue[:] = []
+
+    def __len__(self):
+        with self.lock:
+            return len(self.workingQueue.queue) + len(self.tasks.queue)
+
+    def __nonzero__(self):
+        return bool(len(self))
 
     def __getstate__(self):
         # SchedWatcher can be unpickled for compatibility, but not pickled
@@ -384,13 +396,18 @@ class Scheduler(Unpickable(lock=PickableRLock,
 
         return sdict, packets_registrator.packets
 
-    def LoadBackup(self, filename):
+    def LoadBackup(self, filename, restorer=None):
         with self.lock:
             with open(filename, "r") as stream:
                 sdict, packets = self.Deserialize(stream, self.ObjectRegistratorClass())
 
+            if restorer:
+                restorer(sdict, packets)
+
             qRef = sdict.pop("qRef")
-            prevWatcher = sdict.pop("schedWatcher", None)
+            prevWatcher = sdict.pop("schedWatcher", None) # from old backups
+
+            self.prevWatcher = prevWatcher
 
             self.__setstate__(sdict)
 
@@ -404,33 +421,77 @@ class Scheduler(Unpickable(lock=PickableRLock,
 
             self.RegisterQueues(qRef)
 
+            self.schedWatcher.Clear() # remove tasks from Queue.relocatePacket
             self.FillSchedWatcher(prevWatcher)
 
-    def FillSchedWatcher(self, prevWatcher=None):
-        packets = [
+    def ListPackets(self, state):
+        return (
             pck for q in self.qRef.itervalues()
                 for pck in q.ListAllPackets()
-                    if pck.state == PacketState.WAITING
-        ]
+                    if pck.state == state
+        )
 
-        prevDeadlines = {
-            task.object.id: deadline
-                for deadline, task in itertools.chain(
-                    prevWatcher.tasks.queue,
-                    prevWatcher.workingQueue.queue
-                )
-                    if task.object \
-                        and isinstance(task.object, JobPacket) \
-                        and task.methName == 'stopWaiting'
-        } \
-            if prevWatcher else {}
+    def FillSchedWatcher(self, prev_watcher=None):
+        def list_packets_in_queues(state):
+            return [
+                pck for q in self.qRef.itervalues()
+                    for pck in q.ListAllPackets()
+                        if pck.state == state
+            ]
 
-        for pck in packets:
-            pck.waitingDeadline = pck.waitingDeadline \
-                or prevDeadlines.get(pck.id, None) \
-                or time.time() # missed in old backup
+        def list_schedwatcher_tasks(obj_type, method_name):
+            if not prev_watcher:
+                return []
 
+            return (
+                (deadline, task)
+                    for deadline, task in prev_watcher.ListTasks()
+                        if task.object \
+                            and isinstance(task.object, obj_type) \
+                            and task.methName == method_name
+            )
+
+        def produce_packets_to_wait():
+            packets = list_packets_in_queues(PacketState.WAITING)
+
+            logging.debug("WAITING packets in Queue's for schedWatcher: %s" % [pck.id for pck in packets])
+
+            now = time.time()
+
+            prev_deadlines = {
+                task.object.id: deadline or now
+                    for deadline, task in list_schedwatcher_tasks(JobPacket, 'stopWaiting')
+            }
+
+            if prev_watcher:
+                logging.debug("old backup schedWatcher WAITING packets deadlines: %s" % prev_deadlines)
+
+            for pck in packets:
+                pck.waitingDeadline = pck.waitingDeadline \
+                    or prev_deadlines.get(pck.id, None) \
+                    or time.time() # missed in old backup
+
+            return packets
+
+        def produce_packets_to_reinit():
+            packets1 = list_packets_in_queues(PacketState.NONINITIALIZED)
+
+            logging.debug("NONINITIALIZED packets in Queue's for schedWatcher: %s" % [pck.id for pck in packets1])
+
+            packets2 = [
+                task.args[0]
+                    for _, task in list_schedwatcher_tasks(Queue, 'RestoreNoninitialized')]
+
+            if prev_watcher:
+                logging.debug("NONINITIALIZED packets in old schedWatcher: %s" % [pck.id for pck in packets2])
+
+            return packets1 + packets2
+
+        for pck in produce_packets_to_wait():
             self.ScheduleTaskD(pck.waitingDeadline, pck.stopWaiting)
+
+        for pck in produce_packets_to_reinit():
+            pck.Reinit(self.context)
 
     def RegisterQueues(self, qRef):
         for q in qRef.itervalues():
@@ -526,7 +587,6 @@ class Scheduler(Unpickable(lock=PickableRLock,
 
     def OnTaskPending(self, ref):
         self.Notify(ref)
-    
-    def OnPacketNoninitialized(self, ref):
-        if ref.noninitialized:
-            ref.ScheduleNonitializedRestoring(self.context)
+
+    def OnPacketNoninitialized(self, pck):
+        pck.Reinit(self.context)

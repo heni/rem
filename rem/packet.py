@@ -406,6 +406,10 @@ class JobPacket(Unpickable(lock=PickableRLock,
         PacketCustomLogic(self).DoChangeStateAction()
         return True
 
+    def Reinit(self, context):
+        self.Init(context)
+        self.Resume()
+
     def OnStart(self, ref):
         if not hasattr(self, "waitJobs"):
             self.UpdateJobsDependencies()
