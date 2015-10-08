@@ -156,7 +156,7 @@ class JobPacketImpl(object):
                     file.Unlink(self, binname)
                 except OSError as e:
                     if e.errno == errno.ENOENT:
-                        logging.exception("Packet %s release place error: %s", self.id, e)
+                        logging.exception("Packet %s release place error", self.id)
                     else:
                         raise
                 filehash = file.checksum
@@ -204,7 +204,7 @@ class JobPacketImpl(object):
             try:
                 shutil.rmtree(self.directory, onerror=None)
             except Exception, e:
-                logging.exception("Packet %s release place error: %s", self.id, e)
+                logging.exception("Packet %s release place error", self.id)
         self.directory = None
         self.streams.clear()
 
@@ -235,7 +235,7 @@ class JobPacketImpl(object):
             try:
                 files = os.listdir(self.directory)
             except Exception, e:
-                logging.exception("directory %s listing error: %s", self.directory, e)
+                logging.exception("directory %s listing error", self.directory)
         return files
 
     def GetFile(self, filename):
