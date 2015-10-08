@@ -345,6 +345,8 @@ class PacketNamesStorage(ICallbackAcceptor):
     def OnJobGet(self, job_ref):
         pass
 
+    def OnPacketReinitRequest(self, pck):
+        pass
 
 class MessageStorage(object):
     pass
