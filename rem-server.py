@@ -58,6 +58,7 @@ class AuthRequestHandler(SimpleXMLRPCRequestHandler):
 _scheduler = None
 _context = None
 
+
 def CreateScheduler(context, canBeClear=False):
     sched = Scheduler(context)
     wasRestoreTry = False
