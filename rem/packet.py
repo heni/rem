@@ -248,11 +248,14 @@ class JobPacketImpl(object):
     def ProcessJobStart(self, job):
         job.input = self.createInput(job.id)
         job.output = self.createOutput(job.id)
+        self._add_working(job)
+
+    def _add_working(self, job):
         self.working.add(job.id)
 
-    def _remove_working(self, job_id):
+    def _remove_working(self, job):
         with self.lock:
-            self.working.remove(job_id)
+            self.working.remove(job.id)
             if self._working_empty and not self.working:
                 self._working_empty.notify_all()
 
@@ -268,7 +271,7 @@ class JobPacketImpl(object):
         with self.lock:
             if not self._working_empty:
                 self._working_empty = fork_locking.Condition(self.lock)
-            if not self.working:
+            if self.working:
                 self._working_empty.wait()
             self._working_empty = None
 
@@ -276,7 +279,7 @@ class JobPacketImpl(object):
         if not hasattr(self, "waitJobs"):
             self.UpdateJobsDependencies()
         nState, nTimeout = None, 0
-        self._remove_working(job.id)
+        self._remove_working(job)
         result = job.Result()
         if self.state in (PacketState.NONINITIALIZED, PacketState.SUSPENDED):
             self.leafs.add(job.id)
