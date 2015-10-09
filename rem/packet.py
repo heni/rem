@@ -677,8 +677,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
                         tag.Reset(message)
                 self.Reset()
             else:
-                if self.state == PacketState.SUCCESSFULL:
-                    PacketCustomLogic(self).DoResetNotification(message)
+                PacketCustomLogic(self).DoResetNotification(message)
 
 
 # Hack to restore from old backups (before refcatoring), when JobPacket was in
