@@ -23,7 +23,8 @@ class T03(unittest.TestCase):
         logging.info("packet %s(%s) added to queue %s, waiting until it be done", pckname, pck.id, "test")
         pckInfo = self.connector.PacketInfo(pck.id)
         self.assertEqual(WaitForExecution(pckInfo), "SUCCESSFULL")
-        testShellVar = open(tFile.name, "r").read().strip()
+        with open(tFile.name, "r") as shvarReader:
+            testShellVar = shvarReader.read().strip()
         print("[TEST_SHELL_VAR = \"%s\"]" % testShellVar)
         pckInfo.Delete()
 
