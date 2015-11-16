@@ -1,3 +1,4 @@
+from __future__ import print_function
 import logging
 import hashlib
 import time
@@ -95,15 +96,15 @@ class T08(unittest.TestCase):
         tag = "tag-start-%.0f" % time.time()
         pck = self.connector.Packet("pck-restore-file", wait_tags=[tag])
         with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >> script_printer, "#!/usr/bin/env python"
-            print >> script_printer, "print >>open('../test', 'w'), 42"
+            print("#!/usr/bin/env python", file=script_printer)
+            print("print >>open('../test', 'w'), 42", file=script_printer)
             script_printer.flush()
             j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py": script_printer.name}, tries=2)
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)
         with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >> script_printer, "#!/usr/bin/env python"
-            print >> script_printer, "print >>open('../test', 'w'), 43"
+            print("#!/usr/bin/env python", file=script_printer)
+            print("print >>open('../test', 'w'), 43", file=script_printer)
             script_printer.flush()
             pck.AddFiles({"testfile.py": script_printer.name})
         self.connector.Tag(tag).Set()
@@ -122,8 +123,8 @@ class T08(unittest.TestCase):
         tag = "tag-start-%.0f" % time.time()
         pck = self.connector.Packet("pck-restore-file", wait_tags=[tag])
         with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >> script_printer, "#!/usr/bin/env python"
-            print >> script_printer, "print 42"
+            print("#!/usr/bin/env python", file=script_printer)
+            print("print 42", file=script_printer)
             script_printer.flush()
             j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py": script_printer.name}, tries=2)
             with open(script_printer.name, "r") as reader:

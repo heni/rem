@@ -39,6 +39,6 @@ class T05(unittest.TestCase):
         j1 = pck.AddJob("echo done", parents=[j0])
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)
-        print [job.__dict__ for job in pckInfo.jobs]
+        print([job.__dict__ for job in pckInfo.jobs])
         WaitForExecution(pckInfo, "SUCCESSFULL")
         pckInfo.Delete()

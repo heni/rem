@@ -1,7 +1,8 @@
 import unittest
 import logging
 import time
-import xmlrpclib
+import six
+from six.moves import xmlrpc_client
 
 from testdir import Config, RestartService, TestingQueue, WaitForExecution, WaitForExecutionList
 
@@ -69,5 +70,5 @@ class T06(unittest.TestCase):
 
         self.RestartService()
         self.assertTrue(self.connector.Tag(tagname).Check())
-        self.assertRaises(xmlrpclib.Fault, lambda: self.connector.PacketInfo(pck.id).state)
+        self.assertRaises(xmlrpc_client.Fault, lambda: self.connector.PacketInfo(pck.id).state)
 

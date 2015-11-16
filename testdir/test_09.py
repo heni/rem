@@ -75,7 +75,7 @@ class T09(unittest.TestCase):
         creatorPackets = []
         checkerPackets = []
         logging.info("massive multithreading packets append");
-        for i in xrange(N):
+        for i in range(N):
             signal = threading.Event()
             queue = 'duplicate_tags_test'
             tag = 'dup_tag_%d_%d' % (int(ts), i)

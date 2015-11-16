@@ -1,10 +1,11 @@
+from __future__ import print_function
 import remclient
 
 
 def clean_rem(url):
     connection = remclient.Connector(url)
     for q in connection.ListObjects('queues'):
-        print q
+        print(q)
         for p in connection.Queue(q[0]).ListPackets('all'):
             p.Stop()
             p.Delete()

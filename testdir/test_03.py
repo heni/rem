@@ -1,3 +1,4 @@
+from __future__ import print_function
 import unittest
 import logging
 import time
@@ -23,6 +24,6 @@ class T03(unittest.TestCase):
         pckInfo = self.connector.PacketInfo(pck.id)
         self.assertEqual(WaitForExecution(pckInfo), "SUCCESSFULL")
         testShellVar = open(tFile.name, "r").read().strip()
-        print "[TEST_SHELL_VAR = \"%s\"]" % testShellVar
+        print("[TEST_SHELL_VAR = \"%s\"]" % testShellVar)
         pckInfo.Delete()
 

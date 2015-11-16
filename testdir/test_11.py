@@ -1,7 +1,8 @@
 import unittest
 import logging
 import time
-import xmlrpclib
+import six
+from six.moves import xmlrpc_client
 
 from testdir import *
 
@@ -42,10 +43,10 @@ class T11(unittest.TestCase):
         self._create_packet(pckname)
 
         tagname = "tag-readonlytest-write-%d" % self.timestamp
-        self.assertRaises(xmlrpclib.Fault, lambda: self.readonly_connector.Tag(tagname).Set())
+        self.assertRaises(xmlrpc_client.Fault, lambda: self.readonly_connector.Tag(tagname).Set())
         queue = self.readonly_connector.Queue(TestingQueue.Get())
-        self.assertRaises(xmlrpclib.Fault, lambda: queue.Suspend())
-        self.assertRaises(xmlrpclib.Fault, lambda: queue.Resume())
+        self.assertRaises(xmlrpc_client.Fault, lambda: queue.Suspend())
+        self.assertRaises(xmlrpc_client.Fault, lambda: queue.Resume())
         packet = queue.ListPackets("all", prefix=pckname)[0]
-        self.assertRaises(xmlrpclib.Fault, lambda: packet.Suspend())
-        self.assertRaises(xmlrpclib.Fault, lambda: packet.Resume())
+        self.assertRaises(xmlrpc_client.Fault, lambda: packet.Suspend())
+        self.assertRaises(xmlrpc_client.Fault, lambda: packet.Resume())

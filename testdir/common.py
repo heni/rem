@@ -1,3 +1,4 @@
+from __future__ import print_function
 import time
 import logging
 import os.path
@@ -34,7 +35,7 @@ def WaitForExecution(pckInfo, fin_states=("SUCCESSFULL", "ERROR"), timeout=1.0):
 
 def PrintPacketResults(pckInfo):
     for job in pckInfo.jobs:
-        print job.shell, "\n".join(r.data for r in job.results)
+        print(job.shell, "\n".join(r.data for r in job.results))
 
 
 def WaitForExecutionList(pckList, fin_states=("SUCCESSFULL", "ERROR"), timeout=1.0):
