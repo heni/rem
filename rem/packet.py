@@ -10,6 +10,7 @@ from callbacks import CallbackHolder, ICallbackAcceptor, Tag, tagset
 from common import BinaryFile, PickableRLock, SendEmail, Unpickable, safeStringEncode
 from job import Job, PackedExecuteResult
 import osspec
+import fork_locking
 
 class PacketState(object):
     CREATED = "CREATED"                 #created only packet
@@ -255,15 +256,38 @@ class JobPacketImpl(object):
     def ProcessJobStart(self, job):
         job.input = self.createInput(job.id)
         job.output = self.createOutput(job.id)
-        isStarted = not self.working
+        self._add_working(job)
+
+    def _add_working(self, job):
         self.working.add(job.id)
-        return isStarted
+
+    def _remove_working(self, job):
+        with self.lock:
+            self.working.remove(job.id)
+            if self._working_empty and not self.working:
+                self._working_empty.notify_all()
+
+    def _empty_working(self):
+        with self.lock:
+            self.working.clear()
+            if self._working_empty:
+                self._working_empty.notify_all()
+
+    def _wait_working_empty(self):
+        if not self.working:
+            return
+        with self.lock:
+            if not self._working_empty:
+                self._working_empty = fork_locking.Condition(self.lock)
+            if self.working:
+                self._working_empty.wait()
+            self._working_empty = None
 
     def ProcessJobDone(self, job):
         if not hasattr(self, "waitJobs"):
             self.UpdateJobsDependencies()
         nState, nTimeout = None, 0
-        self.working.remove(job.id)
+        self._remove_working(job)
         result = job.Result()
         if self.state in (PacketState.NONINITIALIZED, PacketState.SUSPENDED):
             self.leafs.add(job.id)
@@ -287,7 +311,7 @@ class JobPacketImpl(object):
         else:
             self.result = PackedExecuteResult(len(self.done), len(self.jobs))
             nState = PacketState.ERROR
-        return nState, nTimeout, not self.working
+        return nState, nTimeout
 
 
 # job module.
@@ -306,6 +330,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
                            notify_emails=(list, []),
                            flags=int,
                            kill_all_jobs_on_error=(bool, True),
+                           _working_empty=lambda : None,
                            isResetable=(bool, True)),
                 CallbackHolder,
                 ICallbackAcceptor,
@@ -337,6 +362,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
             job_done_indicator[job_id] = tag.name
 
         sdict.pop('waitingTime', None) # obsolete
+        sdict.pop('_working_empty', None)
 
         return sdict
 
@@ -414,6 +440,10 @@ class JobPacket(Unpickable(lock=PickableRLock,
         PacketCustomLogic(self).DoChangeStateAction()
         return True
 
+    def Reinit(self, context):
+        self.Init(context)
+        self.Resume()
+
     def OnStart(self, ref):
         if not hasattr(self, "waitJobs"):
             self.UpdateJobsDependencies()
@@ -434,7 +464,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
             self.FireEvent("job_done", ref)
             if ref.id in self.jobs and ref.id in self.working:
                 with self.lock:
-                    nState, nTimeout, isStopped = self.ProcessJobDone(ref)
+                    nState, nTimeout = self.ProcessJobDone(ref)
                 if nState:
                     if nState == PacketState.WAITING:
                         self.waitingDeadline = time.time() + nTimeout
@@ -504,7 +534,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
                 self.changeState(PacketState.SUSPENDED)
             else:
                 self.UpdateJobsDependencies()
-                self.working = set()
+                self._empty_working()
                 self.changeState(PacketState.WORKABLE)
                 if self.leafs:
                     self.changeState(PacketState.PENDING)
@@ -635,9 +665,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
         self.Resume()
 
     def GetWorkingJobs(self):
-        with self.lock:
-            working_copy = list(self.working)
-        for jid in working_copy:
+        for jid in list(self.working):
             yield self.jobs[jid]
 
     def CloseStreams(self):
@@ -661,17 +689,17 @@ class JobPacket(Unpickable(lock=PickableRLock,
     def Reset(self):
         self.changeState(PacketState.NONINITIALIZED)
         self.KillJobs()
+        self._wait_working_empty()
         if self.done_indicator:
             self.done_indicator.Unset()
         for job_id in list(self.done):
             tag = self.job_done_indicator.get(job_id)
             if tag:
                 tag.Unset()
-
         self.done.clear()
         for job in self.jobs.values():
             job.results = []
-        self.Resume()
+        self.FireEvent("packet_reinit_request")
 
     def OnReset(self, (ref, message)):
         if isinstance(ref, Tag):

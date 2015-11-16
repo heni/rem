@@ -229,12 +229,6 @@ def list_queues(name_regex=None, prefix=None, *args):
 
 @readonly_method
 @traced_rpc_method()
-def list_schedule(*args):
-    return _scheduler.schedWatcher.ListTasks()
-
-
-@readonly_method
-@traced_rpc_method()
 def pck_status(pck_id):
     pck = _scheduler.GetPacket(pck_id) or _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
@@ -405,7 +399,6 @@ class RemServer(object):
         self.register_function(queue_delete, "queue_delete")
         self.register_function(list_tags, "list_tags")
         self.register_function(list_queues, "list_queues")
-        self.register_function(list_schedule, "list_schedule")
         self.register_function(pck_status, "pck_status")
         self.register_function(pck_suspend, "pck_suspend")
         self.register_function(pck_resume, "pck_resume")
