@@ -291,7 +291,6 @@ class JobPacketInfo(object):
     Объекты этого класса не нужно создавать вручную, правильный способ их получать - метод Queue.ListPackets"""
     DEF_INFO_TIMEOUT = 1800
     DEF_ATTRS = set(["pck_id", "proxy", "updStamp", "update", "__dict__", "Suspend", "Resume", "Restart", "RestartFromErrors", "Delete", "AddFiles", "multiupdate", "__setstatus__"])
-    STR_ATTRS = set(["status"])
 
     def __init__(self, connector, pck_id):
         self.pck_id = pck_id

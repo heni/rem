@@ -95,14 +95,14 @@ class T08(unittest.TestCase):
         """Restoring file from bin directory"""
         tag = "tag-start-%.0f" % time.time()
         pck = self.connector.Packet("pck-restore-file", wait_tags=[tag])
-        with tempfile.NamedTemporaryFile(dir=".") as script_printer:
+        with tempfile.NamedTemporaryFile(dir=".", mode="w") as script_printer:
             print("#!/usr/bin/env python", file=script_printer)
             print("print >>open('../test', 'w'), 42", file=script_printer)
             script_printer.flush()
             j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py": script_printer.name}, tries=2)
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)
-        with tempfile.NamedTemporaryFile(dir=".") as script_printer:
+        with tempfile.NamedTemporaryFile(dir=".", mode="w") as script_printer:
             print("#!/usr/bin/env python", file=script_printer)
             print("print >>open('../test', 'w'), 43", file=script_printer)
             script_printer.flush()
@@ -122,7 +122,7 @@ class T08(unittest.TestCase):
         packet should change state to WAITING"""
         tag = "tag-start-%.0f" % time.time()
         pck = self.connector.Packet("pck-restore-file", wait_tags=[tag])
-        with tempfile.NamedTemporaryFile(dir=".") as script_printer:
+        with tempfile.NamedTemporaryFile(dir=".", mode="w") as script_printer:
             print("#!/usr/bin/env python", file=script_printer)
             print("print 42", file=script_printer)
             script_printer.flush()

@@ -26,7 +26,7 @@ class T04(unittest.TestCase):
                 pck.AddJob("lockf -t 0 /tmp/%s sleep 2" % pckname, tries=1)
             elif osType == "Linux":
                 pck.AddJob("./lockf.sh", tries=1)
-                with tempfile.NamedTemporaryFile(suffix="-lockf.sh") as script_pr:
+                with tempfile.NamedTemporaryFile(suffix="-lockf.sh", mode="w") as script_pr:
                     print("""
                                         #!/usr/bin/env bash
                                         set -eu
@@ -177,7 +177,7 @@ class T04(unittest.TestCase):
             pck = connector.Packet(pckname, time.time())
             pck.AddJob("cat data.txt")
 
-            with tempfile.NamedTemporaryFile(dir=tmp_dir, suffix=".txt") as f:
+            with tempfile.NamedTemporaryFile(dir=tmp_dir, suffix=".txt", mode="w") as f:
                 for _ in range(100):
                     print(_, file=f)
                 f.flush()

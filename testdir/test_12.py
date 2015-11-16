@@ -16,7 +16,7 @@ class T12(unittest.TestCase):
 
     @classmethod
     def __createHugeFile(cls):
-        f = tempfile.NamedTemporaryFile(dir='.')
+        f = tempfile.NamedTemporaryFile(dir='.', mode="w")
         for _ in range(10 ** 2):
             s = '%s\n' % random.randint(0, 1e9)
             for _ in range(10 ** 5):
