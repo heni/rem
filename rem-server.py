@@ -58,16 +58,20 @@ class AuthRequestHandler(SimpleXMLRPCRequestHandler):
 _scheduler = None
 _context = None
 
+def bind1st(f, arg):
+    return lambda *args, **kwargs: f(arg, *args, **kwargs)
 
-def CreateScheduler(context, canBeClear=False):
+def CreateScheduler(context, canBeClear=False, restorer=None):
     sched = Scheduler(context)
     wasRestoreTry = False
+    if restorer:
+        restorer = bind1st(restorer, sched)
     if os.path.isdir(context.backup_directory):
         for name in sorted(os.listdir(context.backup_directory), reverse=True):
             if sched.CheckBackupFilename(name):
                 backupFile = os.path.join(context.backup_directory, name)
                 try:
-                    sched.LoadBackup(backupFile)
+                    sched.LoadBackup(backupFile, restorer)
                     return sched
                 except Exception, e:
                     logging.exception("can't restore from file \"%s\" : %s", backupFile, e)

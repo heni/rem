@@ -396,10 +396,13 @@ class Scheduler(Unpickable(lock=PickableRLock,
 
         return sdict, packets_registrator.packets
 
-    def LoadBackup(self, filename):
+    def LoadBackup(self, filename, restorer=None):
         with self.lock:
             with open(filename, "r") as stream:
                 sdict, packets = self.Deserialize(stream, self.ObjectRegistratorClass())
+
+            if restorer:
+                restorer(sdict, packets)
 
             qRef = sdict.pop("qRef")
             prevWatcher = sdict.pop("schedWatcher", None) # from old backups
