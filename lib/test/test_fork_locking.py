@@ -16,7 +16,7 @@ class ForkLockingHelpers(object):
     @classmethod
     def LockActionsThreadProc(cls):
         lock = threading.Lock()
-        for _ in xrange(1000):
+        for _ in range(1000):
             _fork_locking.acquire_lock()
             try:
                 with lock:
@@ -30,7 +30,7 @@ class ForkLockingHelpers(object):
 
     @classmethod
     def ForkActionsThreadProc(cls):
-        for _ in xrange(1000):
+        for _ in range(1000):
             _fork_locking.acquire_fork()
             try:
                 pid = os.fork()
@@ -52,7 +52,7 @@ class TestForkLocking(unittest.TestCase):
         logging.basicConfig(level=logging.INFO)
 
     def testForkLocking(self):
-        allThreads = [threading.Thread(target=ForkLockingHelpers.LockActionsThreadProc) for _ in xrange(10)]
+        allThreads = [threading.Thread(target=ForkLockingHelpers.LockActionsThreadProc) for _ in range(10)]
         allThreads += [threading.Thread(target=ForkLockingHelpers.ForkActionsThreadProc)]
         stTime = time.time()
         for th in allThreads:

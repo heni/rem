@@ -1,6 +1,9 @@
 from distutils.core import setup, Extension
 import os
-from ConfigParser import ConfigParser
+try:
+    from ConfigParser import ConfigParser
+except ImportError:
+    from configparser import ConfigParser
 
 
 def LoadMetadata():

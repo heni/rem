@@ -3,7 +3,6 @@
 #endif
 
 #include <pthread.h>
-
 #include <Python.h>
 
 #if defined(__clang__)
@@ -207,8 +206,40 @@ static PyMethodDef module_methods[] = {
     {NULL,            NULL,                      0,           NULL}
 };
 
+#if PY_MAJOR_VERSION >= 3
+struct module_state {
+    PyObject* error;
+};
+#define GETSTATE(m) ((struct module_state*)PyModule_GetState(m))
+static int module_traverse(PyObject* m, visitproc visit, void *arg) {
+    Py_VISIT(GETSTATE(m)->error);
+    return 0;
+}
+static int module_clear(PyObject* m) {
+    Py_CLEAR(GETSTATE(m)->error);
+    return 0;
+}
+static struct PyModuleDef module_def = {
+    PyModuleDef_HEAD_INIT,
+    "_fork_locking",
+    NULL,
+    sizeof(struct module_state),
+    module_methods,
+    NULL,
+    module_traverse,
+    module_clear,
+    NULL
+};
+
+PyObject* PyInit__fork_locking(void) {
+    PyObject* module = PyModule_Create(&module_def);
+    return module;
+}
+#else
 PyMODINIT_FUNC
 init_fork_locking(void)
 {
     Py_InitModule3("_fork_locking", module_methods, NULL);
 }
+#endif
+
