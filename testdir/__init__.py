@@ -1,4 +1,6 @@
 import logging
+import sys
+PY2 = sys.version_info[0] == 2
 
 from .common import *
 from .test_01 import *
@@ -7,7 +9,8 @@ from .test_03 import *
 from .test_04 import *
 from .test_05 import *
 from .test_06 import *
-#from .test_07 import *
+if PY2:
+    from .test_07 import *
 from .test_08 import *
 from .test_09 import *
 from .test_10 import *
