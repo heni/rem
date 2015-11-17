@@ -127,7 +127,7 @@ class T08(unittest.TestCase):
             print("print 42", file=script_printer)
             script_printer.flush()
             j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py": script_printer.name}, tries=2)
-            with open(script_printer.name, "r") as reader:
+            with open(script_printer.name, "rb") as reader:
                 md5sum = hashlib.md5(reader.read()).hexdigest()
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)

@@ -2,6 +2,8 @@ import unittest
 import logging
 import remclient
 from testdir import *
+import six
+from six.moves import xmlrpc_client
 
 
 class T16(unittest.TestCase):
@@ -20,4 +22,4 @@ class T16(unittest.TestCase):
         self.connector.Queue('test_lifetime').SetSuccessLifeTime(1)
         WaitForExecution(pckInfo, "SUCCESSFULL")
         RestartService(Config.Get().server1.projectDir)
-        self.assertRaises(pckInfo.update)
+        self.assertRaises(xmlrpc_client.Fault, pckInfo.update)

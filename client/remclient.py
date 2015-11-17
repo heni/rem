@@ -414,15 +414,16 @@ class JobPacketInfo(object):
             db = bsddb3.btopen(db_path, 'c')
 
             last_modified = int(os.stat(path).st_mtime)
-            val = db.get(path, None)
+            path_key = path.encode("utf-8")
+            val = db.get(path_key, None)
             if val is not None:
-                (checksum, ts) = val.split('\t')
+                (checksum, ts) = val.decode("utf-8").split('\t')
                 if last_modified <= int(ts) <= time.time():
                     return checksum
 
             last_modified = int(os.stat(path).st_mtime)
             checksum = self._CalcFileChecksum(path)
-            db[path] = '%s\t%d' % (checksum, last_modified)
+            db[path_key] = ('%s\t%d' % (checksum, last_modified)).encode("utf-8")
             return checksum
         except bsddb3.db.DBError as e:
             if self.conn.verbose:
@@ -746,7 +747,8 @@ class _RetriableMethod:
         for trying in itertools.count(1):
             try:
                 return self.method(*args)
-            except self.IgnoreExcType as lastExc:
+            except self.IgnoreExcType as e:
+                lastExc = e
                 if self.verbose:
                     name = getattr(self.method, '_Method__name', None) or getattr(self.method, 'im_func', None)
                     logging.getLogger('remclient.default').error("%s: execution for method %s failed [try: %d]\t%s", time.time(), name, trying, lastExc)
