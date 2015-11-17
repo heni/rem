@@ -1,7 +1,6 @@
 import unittest
 import logging
 import time
-import xmlrpclib
 import remclient
 
 from testdir import *

@@ -84,9 +84,9 @@
     SUCCESSFULL - пакет задач выполнен успешно
     HISTORIED   - пакет задач удален из очереди выполнения
 """
-from __future__ import with_statement
+from __future__ import print_function
+import six
 import logging
-import xmlrpclib
 import time
 import os
 import re
@@ -98,6 +98,7 @@ import socket
 import sys
 import itertools
 import datetime
+from six.moves import xmlrpc_client
 from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY, DENY_DUPLICATE_NAMES_POLICY, KILL_JOB_DEFAULT_TIMEOUT, NOTIFICATION_TIMEOUT, WARN_DUPLICATE_NAMES_POLICY
 
 __all__ = [
@@ -137,10 +138,10 @@ def create_connection_nodelay(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, s
                 sock.settimeout(timeout)
             sock.connect(sa)
             return sock
-        except socket.error, msg:
+        except socket.error as msg:
             if sock is not None:
                 sock.close()
-    raise socket.error, msg
+    raise socket.error(msg)
 
 socket.create_connection = create_connection_nodelay
 
@@ -157,7 +158,7 @@ class Queue(object):
         """добавляет в очередь созданный пакет, см. класс JobPacket"""
         try:
             self.proxy.pck_addto_queue(pck.id, self.name, self.conn.packet_name_policy)
-        except xmlrpclib.Fault, e:
+        except xmlrpc_client.Fault as e:
             if 'DuplicatePackageNameException' in e.faultString:
                 if self.conn.packet_name_policy & DENY_DUPLICATE_NAMES_POLICY:
                     self.conn.logger.error(DuplicatePackageNameException(e.faultString).message)
@@ -261,7 +262,7 @@ class JobPacket(object):
         """быстрое(batch) добавление задач в пакет
         принимает неограниченное количество параметров, 
         каждый параметр - словарь, ключи и значения которого аналогичны параметрам метода AddJob"""
-        multicall = xmlrpclib.MultiCall(self.proxy)
+        multicall = xmlrpc_client.MultiCall(self.proxy)
         for job in jobs:
             if "files" in job:
                 self.AddFiles(job["files"])
@@ -320,20 +321,20 @@ class JobPacketInfo(object):
                 raise RuntimeError("multiupdate method can process only jobs from the same server")
         if first is None:
             return set()#nothing to do
-        multicall = xmlrpclib.MultiCall(first.proxy)
+        multicall = xmlrpc_client.MultiCall(first.proxy)
         for obj in objects:
             multicall.pck_status(obj.pck_id)
         multicall_iterator = multicall()
         goodObjects = set()
-        for index in xrange(len(objects)):
+        for index in range(len(objects)):
             try:
                 pck_status = multicall_iterator[index]
                 obj = objects[index]
                 obj.__setstatus__(pck_status)
                 goodObjects.add(obj)
-            except xmlrpclib.Fault, e:
+            except xmlrpc_client.Fault as e:
                 if verbose:
-                    print >>sys.stderr, "multicall exception raised: %s" % e
+                    print("multicall exception raised: %s" % e, file=sys.stderr)
         return goodObjects
 
     def update(self):
@@ -382,13 +383,13 @@ class JobPacketInfo(object):
         """удаляет пакет (для работающих пакетов рекомендуется сначала выполнить Suspend())"""
         try:
             self.proxy.pck_delete(self.pck_id)
-        except xmlrpclib.Fault, inst:
+        except xmlrpc_client.Fault as inst:
             raise RuntimeError(inst.faultString)
 
     @classmethod
     def _CalcFileChecksum(cls, path):
         BUF_SIZE = 256 * 1024
-        with open(path, "r") as reader:
+        with open(path, "rb") as reader:
             cs_calc = hashlib.md5()
             while True:
                 buff = reader.read(BUF_SIZE)
@@ -403,9 +404,9 @@ class JobPacketInfo(object):
 
         try:
             import bsddb3
-        except ImportError, e:
+        except ImportError as e:
             if self.conn.verbose:
-                print >>sys.stderr, "Can't import bsddb3 module: %r" % e
+                print("Can't import bsddb3 module: %r" % e, file=sys.stderr)
             return self._CalcFileChecksum(path)
 
         db = None
@@ -413,19 +414,20 @@ class JobPacketInfo(object):
             db = bsddb3.btopen(db_path, 'c')
 
             last_modified = int(os.stat(path).st_mtime)
-            val = db.get(path, None)
+            path_key = path.encode("utf-8")
+            val = db.get(path_key, None)
             if val is not None:
-                (checksum, ts) = val.split('\t')
+                (checksum, ts) = val.decode("utf-8").split('\t')
                 if last_modified <= int(ts) <= time.time():
                     return checksum
 
             last_modified = int(os.stat(path).st_mtime)
             checksum = self._CalcFileChecksum(path)
-            db[path] = '%s\t%d' % (checksum, last_modified)
+            db[path_key] = ('%s\t%d' % (checksum, last_modified)).encode("utf-8")
             return checksum
-        except bsddb3.db.DBError, e:
+        except bsddb3.db.DBError as e:
             if self.conn.verbose:
-                print >>sys.stderr, "Failed obtaining checksum from bsddb3 db: %r" % e
+                print("Failed obtaining checksum from bsddb3 db: %r" % e, file=sys.stderr)
             return self._CalcFileChecksum(path)
         finally:
             if db is not None:
@@ -434,7 +436,7 @@ class JobPacketInfo(object):
     def _TryCheckBinaryAndLock(self, checksum, localPath):
         try:
             return self.proxy.check_binary_and_lock(checksum, localPath)
-        except xmlrpclib.Fault, e:
+        except xmlrpc_client.Fault as e:
             if self.conn.verbose:
                 self.conn.logger.error("check_binary_and_lock raised exception: code=%s descr=%s", e.faultCode, e.faultString)
             return False
@@ -444,7 +446,7 @@ class JobPacketInfo(object):
         принимает один параметр files - полностью идентичный одноименному параметру для JobPacket.AddJob"""
         if not isinstance(files, dict):
             files = dict((os.path.split(file)[-1], file) for file in files)
-        for fname, fpath in files.iteritems():
+        for fname, fpath in files.items():
             if not os.path.isfile(fpath):
                 raise AttributeError("can't find file \"%s\"" % fpath)
 
@@ -453,7 +455,7 @@ class JobPacketInfo(object):
                 data = open(fpath, 'r').read()
                 checksum2 = hashlib.md5(data).hexdigest()
                 if (checksum2 == checksum) or not self._TryCheckBinaryAndLock(checksum2, fpath):
-                    self.proxy.save_binary(xmlrpclib.Binary(data))
+                    self.proxy.save_binary(xmlrpc_client.Binary(data))
                 checksum = checksum2
 
             self.proxy.pck_add_binary(self.pck_id, fname, checksum)
@@ -517,7 +519,7 @@ class JobInfo(object):
     def __init__(self, **kws):
         self.__dict__.update(kws)
         for res in getattr(self, 'results', ()):
-            res.data = "\n".join([x for x in res.data.splitlines() if x.strip()])
+            res.data = "\n".join([x for x in res.data.decode("utf-8").splitlines() if x.strip()])
 
 
 class Tag(object):
@@ -564,34 +566,34 @@ class TagsBulk(object):
             self.tags = []
 
     def Check(self):
-        multicall = xmlrpclib.MultiCall(self.conn.proxy)
+        multicall = xmlrpc_client.MultiCall(self.conn.proxy)
         for tag in self.tags:
             multicall.check_tag(tag)
         multicall_iterator = multicall()
-        self.states = dict(zip(self.tags, multicall_iterator))
+        self.states = dict(list(zip(self.tags, multicall_iterator)))
 
     def FilterSet(self):
         self.Check()
-        return TagsBulk(self.conn, filter(lambda x: self.states[x], self.tags))
+        return TagsBulk(self.conn, [x for x in self.tags if self.states[x]])
 
     def FilterUnset(self):
         self.Check()
-        return TagsBulk(self.conn, filter(lambda x: not self.states[x], self.tags))
+        return TagsBulk(self.conn, [x for x in self.tags if not self.states[x]])
 
     def Set(self):
-        multicall = xmlrpclib.MultiCall(self.conn.proxy)
+        multicall = xmlrpc_client.MultiCall(self.conn.proxy)
         for obj in self.tags:
             multicall.set_tag(obj)
         return multicall()
 
     def Unset(self):
-        multicall = xmlrpclib.MultiCall(self.conn.proxy)
+        multicall = xmlrpc_client.MultiCall(self.conn.proxy)
         for obj in self.tags:
             multicall.unset_tag(obj)
         return multicall()
 
     def Reset(self):
-        multicall = xmlrpclib.MultiCall(self.conn.proxy)
+        multicall = xmlrpc_client.MultiCall(self.conn.proxy)
         for obj in self.tags:
             multicall.reset_tag(obj)
         return multicall()
@@ -643,7 +645,7 @@ class Connector(object):
                 raise AttributeError("wrong wait_tags attribute type")
             return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness, resetable,
                              kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
-        except xmlrpclib.Fault, e:
+        except xmlrpc_client.Fault as e:
             if 'DuplicatePackageNameException' in e.faultString:
                 self.logger.error(DuplicatePackageNameException(e.faultString).message)
                 raise DuplicatePackageNameException(e.faultString)
@@ -668,7 +670,7 @@ class Connector(object):
         """возвращает объект для манипуляций с пакетом (см. класс JobPacketInfo)
         принимает один параметр - объект типа JobPacket"""
         pck_id = packet.id if isinstance(packet, JobPacket) \
-            else packet if isinstance(packet, types.StringTypes) \
+            else packet if isinstance(packet, str) \
             else None
         if pck_id is None:
             raise RuntimeError("can't create PacketInfo instance from %r" % packet)
@@ -708,7 +710,7 @@ class AdminConnector(object):
 
     def ListClients(self):
         """возвращает топологию сети"""
-        return map(lambda x: ServerInfo(**x), self.proxy.list_clients())
+        return [ServerInfo(**x) for x in self.proxy.list_clients()]
 
     def ClientInfo(self, name):
         """возвращает информацию о клиенте"""
@@ -745,7 +747,8 @@ class _RetriableMethod:
         for trying in itertools.count(1):
             try:
                 return self.method(*args)
-            except self.IgnoreExcType, lastExc:
+            except self.IgnoreExcType as e:
+                lastExc = e
                 if self.verbose:
                     name = getattr(self.method, '_Method__name', None) or getattr(self.method, 'im_func', None)
                     logging.getLogger('remclient.default').error("%s: execution for method %s failed [try: %d]\t%s", time.time(), name, trying, lastExc)
@@ -755,7 +758,7 @@ class _RetriableMethod:
         raise lastExc
 
 
-class AuthTransport(xmlrpclib.Transport):
+class AuthTransport(xmlrpc_client.Transport):
     def send_content(self, connection, request_body):
         connection.putheader("X-Username", getpass.getuser())
         connection.putheader("Content-Type", "text/xml")
@@ -765,17 +768,17 @@ class AuthTransport(xmlrpclib.Transport):
             connection.send(request_body)
 
 
-class RetriableXMLRPCProxy(xmlrpclib.ServerProxy):
+class RetriableXMLRPCProxy(xmlrpc_client.ServerProxy):
 
     def __init__(self, uri, tries, **kws):
         self.__maxTries = tries
         self.__verbose = kws.pop("verbose")
         self.__uri = uri
         kws["transport"] = AuthTransport()
-        xmlrpclib.ServerProxy.__init__(self, uri, **kws)
+        xmlrpc_client.ServerProxy.__init__(self, uri, **kws)
 
     def __getattr__(self, name):
-        return _RetriableMethod(xmlrpclib.ServerProxy.__getattr__(self, name), self.__maxTries, self.__verbose, socket.error)
+        return _RetriableMethod(xmlrpc_client.ServerProxy.__getattr__(self, name), self.__maxTries, self.__verbose, socket.error)
 
 
 def _InitializeDefaultLogger():

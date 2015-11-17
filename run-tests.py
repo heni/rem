@@ -7,9 +7,10 @@ import shutil
 import sys
 import tempfile
 import unittest
-from ConfigParser import ConfigParser
 
 sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), "client"))
+import six
+from six.moves.configparser import ConfigParser
 import remclient
 import testdir
 

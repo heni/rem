@@ -16,17 +16,17 @@ class T12(unittest.TestCase):
 
     @classmethod
     def __createHugeFile(cls):
-        f = tempfile.NamedTemporaryFile(dir='.')
-        for _ in xrange(10 ** 2):
+        f = tempfile.NamedTemporaryFile(dir='.', mode="w")
+        for _ in range(10 ** 2):
             s = '%s\n' % random.randint(0, 1e9)
-            for _ in xrange(10 ** 5):
+            for _ in range(10 ** 5):
                 f.write(s)
         f.flush()
         return f
 
     def __addPackages(self, filePath, count):
         queue = self.connector.Queue('checksum_cache_test')
-        for _ in xrange(count):
+        for _ in range(count):
             pck = self.connector.Packet(
                 'checksum_test',
                 time.time(),

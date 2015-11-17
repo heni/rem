@@ -1,3 +1,4 @@
+from __future__ import print_function
 import bsddb3
 import copy
 import logging
@@ -17,7 +18,7 @@ class T04(unittest.TestCase):
 
     def testWorkingLimits(self):
         pckname = "lmt-worker-%.0f" % time.time()
-        pckList = [self.connector.Packet(pckname, time.time()) for _ in xrange(10)]
+        pckList = [self.connector.Packet(pckname, time.time()) for _ in range(10)]
 
         for pck in pckList:
             osType = os.uname()[0]
@@ -25,8 +26,8 @@ class T04(unittest.TestCase):
                 pck.AddJob("lockf -t 0 /tmp/%s sleep 2" % pckname, tries=1)
             elif osType == "Linux":
                 pck.AddJob("./lockf.sh", tries=1)
-                with tempfile.NamedTemporaryFile(suffix="-lockf.sh") as script_pr:
-                    print >> script_pr, """
+                with tempfile.NamedTemporaryFile(suffix="-lockf.sh", mode="w") as script_pr:
+                    print("""
                                         #!/usr/bin/env bash
                                         set -eu
                                         lockfile-create {lockfile}
@@ -35,14 +36,14 @@ class T04(unittest.TestCase):
                                         sleep 2
                                         kill $BADGER
                                         lockfile-remove {lockfile}
-                                        """.format(lockfile="/tmp/" + pckname)
+                                        """.format(lockfile="/tmp/" + pckname), file=script_pr)
                     script_pr.flush()
                     pck.AddFiles({"lockf.sh": script_pr.name})
             else:
                 raise RuntimeError("unsupport os: %s" % osType)
         for pck in pckList:
             self.connector.Queue(LmtTestQueue.Get()).AddPacket(pck)
-        pckList = map(self.connector.PacketInfo, pckList)
+        pckList = list(map(self.connector.PacketInfo, pckList))
         WaitForExecutionList(pckList)
         for pck in pckList:
             self.assertEqual(pck.state, "SUCCESSFULL")
@@ -77,7 +78,7 @@ class T04(unittest.TestCase):
         waitings = [strtTag]
         pckList = []
         logging.info("start long chain adding")
-        for idx in xrange(1000):
+        for idx in range(1000):
             pckname = "sleeptest-%.0f-%s" % (tm, idx)
             pck = self.connector.Packet(pckname, time.time(), wait_tags=waitings, set_tag="%s-%d" % (tgPrfx, idx))
             pck.AddJob("echo .")
@@ -94,7 +95,7 @@ class T04(unittest.TestCase):
         tm = time.time()
         pckname = "prlexec-%.0f" % tm
         pck = self.connector.Packet(pckname, time.time(), set_tag=pckname)
-        for idx in xrange(1000):
+        for idx in range(1000):
             pck.AddJob("echo -n . >&2")
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)
@@ -108,7 +109,7 @@ class T04(unittest.TestCase):
         pck = self.connector.Packet(pckname, time.time(), set_tag=pckname)
 
         parentJobs = []
-        for idx in xrange(1000):
+        for idx in range(1000):
             job = pck.AddJob('true', parents=parentJobs)
             parentJobs = [job]
 
@@ -123,7 +124,7 @@ class T04(unittest.TestCase):
         pck = self.connector.Packet(pckname, time.time(), set_tag=pckname)
 
         parentJobs = []
-        for idx in xrange(1000):
+        for idx in range(1000):
             job = pck.AddJob('true')
             parentJobs.append(job)
 
@@ -144,7 +145,7 @@ class T04(unittest.TestCase):
                     pck.Delete()
                 except:
                     logging.error("can't delete packet '%s'", pck.pck_id)
-            print q.Status()
+            print(q.Status())
 
     def testRemoveWorking(self):
         pckname = "running-%.f" % time.time()
@@ -176,9 +177,9 @@ class T04(unittest.TestCase):
             pck = connector.Packet(pckname, time.time())
             pck.AddJob("cat data.txt")
 
-            with tempfile.NamedTemporaryFile(dir=tmp_dir, suffix=".txt") as f:
-                for _ in xrange(100):
-                    print >> f, _
+            with tempfile.NamedTemporaryFile(dir=tmp_dir, suffix=".txt", mode="w") as f:
+                for _ in range(100):
+                    print(_, file=f)
                 f.flush()
                 pck.AddFiles({"data.txt": f.name})
 

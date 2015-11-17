@@ -72,7 +72,7 @@ class T10(unittest.TestCase):
 
         NUMBER_OF_TAGS = 404
         remote_tags = []
-        for i in xrange(NUMBER_OF_TAGS):
+        for i in range(NUMBER_OF_TAGS):
             tag1 = "(1)%s-%d" % (tag, i)
             remote_tag1 = self.servername1 + ":" + tag1
 

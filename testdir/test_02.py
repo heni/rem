@@ -1,3 +1,4 @@
+from __future__ import print_function
 import unittest
 import logging
 import time
@@ -5,7 +6,8 @@ import tempfile
 import subprocess
 from threading import Thread
 import copy
-import xmlrpclib
+import six
+from six.moves import xmlrpc_client
 
 import remclient
 from testdir import *
@@ -32,11 +34,11 @@ class T02(unittest.TestCase):
     def testPythonImport(self):
         pckname = "pythonimport-%d" % self.timestamp
         pck = self.connector.Packet(pckname, self.timestamp)
-        f0 = tempfile.NamedTemporaryFile(dir=".", suffix="module.py")
-        f1 = tempfile.NamedTemporaryFile(dir=".", suffix="s.py")
-        print >> f0, "X = 'OK'"
+        f0 = tempfile.NamedTemporaryFile(dir=".", suffix="module.py", mode="w")
+        f1 = tempfile.NamedTemporaryFile(dir=".", suffix="s.py", mode="w")
+        print("X = 'OK'", file=f0)
         f0.flush()
-        print >> f1, "#!/usr/bin/env python\nimport module\nprint module.X";
+        print("#!/usr/bin/env python\nimport module\nprint module.X", file=f1);
         f1.flush()
         j0 = pck.AddJob("PYTHONPATH=. ./s.py", files={"module.py": f0.name, "s.py": f1.name}, tries=1)
         j1 = pck.AddJob("grep OK", pipe_parents=[j0], tries=1)
@@ -80,7 +82,7 @@ class T02(unittest.TestCase):
         pckList = []
         tagList = []
         queue = self.connector.Queue(TestingQueue.Get())
-        for index in xrange(10):
+        for index in range(10):
             pckname = "bulkpck-%d-%d" % (index, self.timestamp)
             tagList += ["tg-%d-psx-%d" % (index, self.timestamp), "tg-%d-echo-%d" % (index, self.timestamp)]
             pck = self.connector.Packet(pckname, self.timestamp, notify_emails=[self.notifyEmail])
@@ -124,11 +126,11 @@ class T02(unittest.TestCase):
     def testHugeOutput(self):
         pckname = "hugeout-%d" % self.timestamp
         pck = self.connector.Packet(pckname, self.timestamp, notify_emails=[self.notifyEmail])
-        with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >> script_printer, "#!/usr/bin/env python"
-            print >> script_printer, "import sys"
-            print >> script_printer, r"print 'Hello, World!\n'*10000000"
-            print >> script_printer, r"print >>sys.stderr, 'Hello, World!\n'*10000000"
+        with tempfile.NamedTemporaryFile(dir=".", mode="w") as script_printer:
+            print("#!/usr/bin/env python", file=script_printer)
+            print("import sys", file=script_printer)
+            print(r"print 'Hello, World!\n'*10000000", file=script_printer)
+            print(r"print >>sys.stderr, 'Hello, World!\n'*10000000", file=script_printer)
             script_printer.flush()
             j1 = pck.AddJob("./huge.py", tries=2, files={"huge.py": script_printer.name})
         j2 = pck.AddJob("wc -l", pipe_parents=[j1], tries=2)
@@ -153,18 +155,18 @@ class T02(unittest.TestCase):
         time.sleep(0.2)
         popen = subprocess.Popen(["ps", "x", "-o", "command"], stdout=subprocess.PIPE)
         logging.info("")
-        self.assertEqual(contains(popen.stdout, "12344321"), False)
+        self.assertEqual(contains(popen.stdout, b"12344321"), False)
         pckInfo.Resume()
         time.sleep(0.2)
         pckInfo.Suspend()
         popen = subprocess.Popen(["ps", "x", "-o", "command"], stdout=subprocess.PIPE)
         logging.info("")
-        self.assertEqual(contains(popen.stdout, "12344321"), True)
+        self.assertEqual(contains(popen.stdout, b"12344321"), True)
         pckInfo.Stop()
         time.sleep(0.2)
         popen = subprocess.Popen(["ps", "x", "-o", "command"], stdout=subprocess.PIPE)
         logging.info("")
-        self.assertEqual(contains(popen.stdout, "12344321"), False)
+        self.assertEqual(contains(popen.stdout, b"12344321"), False)
         pckInfo.Delete()
 
     def testTagsBulk(self):
@@ -217,10 +219,10 @@ class T02(unittest.TestCase):
         qobj.AddPacket(pck)
         logging.info("queue %s: %s", qname, qobj.Status())
         pckInfo = self.connector.PacketInfo(pck.id)
-        self.assertRaises(xmlrpclib.Fault, qobj.Delete)
+        self.assertRaises(xmlrpc_client.Fault, qobj.Delete)
         WaitForExecution(pckInfo)
         logging.info("queue %s: %s", qname, qobj.Status())
-        self.assertRaises(xmlrpclib.Fault, qobj.Delete)
+        self.assertRaises(xmlrpc_client.Fault, qobj.Delete)
         pckInfo.Delete()
         logging.info("queue %s: %s", qname, qobj.Status())
         qobj.Delete()
@@ -248,9 +250,9 @@ class T02(unittest.TestCase):
             tagname = "async-query-tag-%d" % i
             self.connector.Tag(tagname).Set()
         logging.info("tags are set")
-        requesters = [Thread(target=queryFunction, args=[remclient.Connector(self.connector.GetURL())]) for _ in xrange(5)]
-        map(lambda t: t.start(), requesters)
-        map(lambda t: t.join(), requesters)
+        requesters = [Thread(target=queryFunction, args=[remclient.Connector(self.connector.GetURL())]) for _ in range(5)]
+        list(map(lambda t: t.start(), requesters))
+        list(map(lambda t: t.join(), requesters))
 
     def testUniquePacket(self):
         pckname = "unique-pck-%.0f" % time.time()
@@ -264,7 +266,7 @@ class T02(unittest.TestCase):
 
     def testQueueDoesntExist(self):
         """Tests that read operations on non-existent queue fail"""
-        self.assertRaises(xmlrpclib.Fault, lambda: self.connector.Queue('queue-that-doesnt-exist').Status())
+        self.assertRaises(xmlrpc_client.Fault, lambda: self.connector.Queue('queue-that-doesnt-exist').Status())
 
     def testWrongTagDependency(self):
         """Tests exception raise for wide-common wait_tags incorrect usage"""

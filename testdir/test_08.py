@@ -1,3 +1,4 @@
+from __future__ import print_function
 import logging
 import hashlib
 import time
@@ -94,16 +95,16 @@ class T08(unittest.TestCase):
         """Restoring file from bin directory"""
         tag = "tag-start-%.0f" % time.time()
         pck = self.connector.Packet("pck-restore-file", wait_tags=[tag])
-        with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >> script_printer, "#!/usr/bin/env python"
-            print >> script_printer, "print >>open('../test', 'w'), 42"
+        with tempfile.NamedTemporaryFile(dir=".", mode="w") as script_printer:
+            print("#!/usr/bin/env python", file=script_printer)
+            print("print >>open('../test', 'w'), 42", file=script_printer)
             script_printer.flush()
             j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py": script_printer.name}, tries=2)
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)
-        with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >> script_printer, "#!/usr/bin/env python"
-            print >> script_printer, "print >>open('../test', 'w'), 43"
+        with tempfile.NamedTemporaryFile(dir=".", mode="w") as script_printer:
+            print("#!/usr/bin/env python", file=script_printer)
+            print("print >>open('../test', 'w'), 43", file=script_printer)
             script_printer.flush()
             pck.AddFiles({"testfile.py": script_printer.name})
         self.connector.Tag(tag).Set()
@@ -121,12 +122,12 @@ class T08(unittest.TestCase):
         packet should change state to WAITING"""
         tag = "tag-start-%.0f" % time.time()
         pck = self.connector.Packet("pck-restore-file", wait_tags=[tag])
-        with tempfile.NamedTemporaryFile(dir=".") as script_printer:
-            print >> script_printer, "#!/usr/bin/env python"
-            print >> script_printer, "print 42"
+        with tempfile.NamedTemporaryFile(dir=".", mode="w") as script_printer:
+            print("#!/usr/bin/env python", file=script_printer)
+            print("print 42", file=script_printer)
             script_printer.flush()
             j = pck.AddJob("sleep 1 && ./testfile.py", files={"testfile.py": script_printer.name}, tries=2)
-            with open(script_printer.name, "r") as reader:
+            with open(script_printer.name, "rb") as reader:
                 md5sum = hashlib.md5(reader.read()).hexdigest()
         self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
         pckInfo = self.connector.PacketInfo(pck.id)
