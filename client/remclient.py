@@ -99,7 +99,12 @@ import sys
 import itertools
 import datetime
 from six.moves import xmlrpc_client
-from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY, DENY_DUPLICATE_NAMES_POLICY, KILL_JOB_DEFAULT_TIMEOUT, NOTIFICATION_TIMEOUT, WARN_DUPLICATE_NAMES_POLICY
+try:
+    from .constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY, DENY_DUPLICATE_NAMES_POLICY, KILL_JOB_DEFAULT_TIMEOUT, NOTIFICATION_TIMEOUT, WARN_DUPLICATE_NAMES_POLICY
+except ImportError:
+    from constants import DEFAULT_DUPLICATE_NAMES_POLICY, IGNORE_DUPLICATE_NAMES_POLICY, DENY_DUPLICATE_NAMES_POLICY, KILL_JOB_DEFAULT_TIMEOUT, NOTIFICATION_TIMEOUT, WARN_DUPLICATE_NAMES_POLICY
+
+
 
 __all__ = [
     "AdminConnector", "Connector",
@@ -452,7 +457,7 @@ class JobPacketInfo(object):
 
             checksum = self._GetFileChecksum(fpath, self.conn.checksumDbPath)
             if not self._TryCheckBinaryAndLock(checksum, fpath):
-                data = open(fpath, 'r').read()
+                data = open(fpath, 'rb').read()
                 checksum2 = hashlib.md5(data).hexdigest()
                 if (checksum2 == checksum) or not self._TryCheckBinaryAndLock(checksum2, fpath):
                     self.proxy.save_binary(xmlrpc_client.Binary(data))

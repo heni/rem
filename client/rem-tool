@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import print_function
 import time
 import optparse
 import remclient
@@ -51,23 +52,24 @@ class ICommander(object):
 def print_pck_info(pck, extended=False):
     workTime = pck.GetWorkingTime()
     hd = "packet '%s':" % pck.pck_id
-    print "%s\tname=%s,state=%s;wait=%r,priority=%s;working_time=%s;result_tag=%s;last_update='%s'" \
+    print(("%s\tname=%s,state=%s;wait=%r,priority=%s;working_time=%s;result_tag=%s;last_update='%s'" \
         % (hd, pck.name, pck.state, 
            pck.wait, pck.priority, workTime, pck.result_tag, 
            time.strftime("%Y/%m/%d-%H:%M:%S", time.localtime(pck.history[-1][1]) if pck.history else "none"),
           )
+    ))
     for job in pck.jobs:
-        if job.state == "working": print "%sexec_shell=%s" % (" " * len(hd), job.shell)
+        if job.state == "working": print("%sexec_shell=%s" % (" " * len(hd), job.shell))
     if extended:
         for status, tstamp in pck.history:
-            print "\t[%s] %s" % (time.ctime(tstamp), status)
+            print("\t[%s] %s" % (time.ctime(tstamp), status))
         for job in pck.jobs:
-            print "[SUBJOB %s] id: %s,\tshell: %s" % (getattr(job, 'desc', ''), getattr(job, 'id', None), job.shell)
+            print("[SUBJOB %s] id: %s,\tshell: %s" % (getattr(job, 'desc', ''), getattr(job, 'id', None), job.shell))
             if not getattr(job, 'wait_jobs', None):
-                print job.state
+                print(job.state)
             else:
-                print "%s (waiting for jobs: %s)" % (job.state, ', '.join(str(j.id) for j in job.wait_jobs))
-            print "\n".join(i.data.replace("\n", "\n\t") for i in job.results)
+                print("%s (waiting for jobs: %s)" % (job.state, ', '.join(str(j.id) for j in job.wait_jobs)))
+            print("\n".join(i.data.replace("\n", "\n\t") for i in job.results))
 
 
 class CommandExecutionError(Exception): pass
@@ -83,13 +85,13 @@ class ListCommander(ICommander):
                 print_pck_info(pck)
         elif self.options.list_tags:
             for tag, value in sorted(self.conn.ListObjects("tags", self.options.name, self.options.prefix)):
-                print ("+" if value else "-"), tag
+                print(("+" if value else "-"), tag)
         elif self.options.list_all_tags:
             for tag, value in sorted(self.conn.ListObjects("tags", self.options.name, self.options.prefix, False)):
-                print ("+" if value else "-"), tag
+                print(("+" if value else "-"), tag)
         else:
             for q, q_stat in self.conn.ListObjects("queues", self.options.name, self.options.prefix):
-                print "queue '%s':\t\t%r" % (q, q_stat)
+                print("queue '%s':\t\t%r" % (q, q_stat))
 
 
 class TagManipCommander(ICommander):
@@ -137,13 +139,13 @@ class StatusCommander(ICommander):
     def __call__(self):
         if self.options.queue:
             q = self.conn.Queue(self.options.queue)
-            print "queue '%s':\t%r" % (self.options.queue, q.Status())
+            print("queue '%s':\t%r" % (self.options.queue, q.Status()))
         if self.options.packet:
             pck = self.conn.PacketInfo(self.options.packet)
             print_pck_info(pck, extended=True)
         if self.options.tag:
             tag = self.conn.Tag(self.options.tag)
-            print "tag %s value: %s" % (tag.name, tag.Check())
+            print("tag %s value: %s" % (tag.name, tag.Check()))
 
 
 class UpdateCommander(ICommander):
