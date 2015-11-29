@@ -20,11 +20,11 @@ setup(
     description = "client library for REM server; see at https://github.com/heni/rem",
     maintainer = "Eugene Krokhalev",
     maintainer_email = "Eugene.Krokhalev@gmail.com",
-    version = "1.0.2",
+    version = "1.0.4",
     packages = [ "remclient" ],
     package_dir = { '': "src" },
     scripts = [ "rem-tool" ],
-    install_requires = [ "six", "bsddb3" ],
+    install_requires = [ "six"],
     classifiers = [
         "Development Status :: 5 - Production/Stable",
         "Environment :: Console",
