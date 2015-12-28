@@ -8,7 +8,7 @@ def prepare_sources():
         os.makedirs(srcdir)
     for filename in modules:
         target = os.path.join("src/remclient", filename)
-        if os.path.islink(target):
+        if os.path.islink(target) or os.path.isfile(target):
             os.unlink(target)
         os.symlink(os.path.join("../..", filename), target)
 
@@ -20,7 +20,7 @@ setup(
     description = "client library for REM server; see at https://github.com/heni/rem",
     maintainer = "Eugene Krokhalev",
     maintainer_email = "Eugene.Krokhalev@gmail.com",
-    version = "1.0.4",
+    version = "1.0.6",
     packages = [ "remclient" ],
     package_dir = { '': "src" },
     scripts = [ "rem-tool" ],
