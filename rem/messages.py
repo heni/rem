@@ -50,7 +50,12 @@ class PacketExecutionError(IMessageHelper):
         mbuf = cStringIO.StringIO()
 
         def appendJobItem(job, itemName):
-            print >> mbuf, "\t%s: %s" % (itemName, job.get(itemName, "N/A"))
+            def get(key):
+                val = job.get(key, "N/A")
+                if isinstance(val, unicode):
+                    val = val.encode('utf-8')
+                return val
+            print >> mbuf, "\t%s: %s" % (itemName, get(itemName))
 
         def appendJobResults(job):
             if job.get("results"):
