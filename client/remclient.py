@@ -6,13 +6,13 @@
 Первые шаги.
 Первым делом следует создать объект-коннектор, используя URL-сервера.
     conn = Connector("http://localhost:8104/")
-В дальнейшем через коннектор можно получить доступ к конкретной очереди (conn.Queue(qname)), 
+В дальнейшем через коннектор можно получить доступ к конкретной очереди (conn.Queue(qname)),
 тэгу (conn.Tag(tagname)), создать пакет(conn.Packet(...)) или получить список зарегистрированных
 на сервере очередей или тэгов(conn.ListObjects("queues") и conn.ListObjects("tags") соответственно).
 
 Создание пакета.
     PACK_PRIOR = time.time()
-    #создаётся пакет с именем packet-name, приориететом выполнения PACK_PRIOR, 
+    #создаётся пакет с именем packet-name, приориететом выполнения PACK_PRIOR,
     #  начало выполнения пакета должно быть отложено до момента, когда будут установлены все тэги "tag1", "tag2" и "tag3"
     #  и в случае успешного выполнения пакета следует установить тэг "tag4"
     # kill_all_jobs_on_error - при неудачном завершении задания остальные задания прекращают работу.
@@ -27,7 +27,7 @@
     #  pipe_fail - аналог "set -o pipefail" для bash (работает только в случае, если bash установлен на сервере с REM'ом)
     #  description - опциональный параметр, задающий человекочитамое имя джоба
     #  files - список файлов, которые нужно положить в рабочую директорию задания (рабочая директория у всех заданий внутри одного пакета одна и та же)
-    #          можно вместо списка указать dictionary, в этом случае значение словаря будет указывать на путь до файла, а ключ на имя, с которым этот файл следует положить 
+    #          можно вместо списка указать dictionary, в этом случае значение словаря будет указывать на путь до файла, а ключ на имя, с которым этот файл следует положить
     #          в рабочий каталог задания (реально в рабочем каталоге создаются symlink'и на файлы, располагающиеся в одной общей директории, куда копируются все бинарники)
     job0 = pack.AddJob(shell = "some_cmd")
     job1 = pack.AddJob(shell = "some_else_cmd", tries = 3)
@@ -79,7 +79,7 @@
     WORKABLE    - рабочее состояние пакета (на данный момент в пакете нет задач для выполнения: ожидается выполнение уже запущенных задач)
     PENDING     - рабочее состояние пакета (есть задачи, ждущие своего выполнения)
     SUSPENDED   - выполнение новых задач приостановлено (вручную), либо ожидается установка необходимых стартовых тэгов
-    ERROR       - возникла невосстановимая автоматически ошибка выполнения пакета задач (после разрешения задачи вручную невополненные задачи 
+    ERROR       - возникла невосстановимая автоматически ошибка выполнения пакета задач (после разрешения задачи вручную невополненные задачи
                     можно запустить заново через последовательность команд: pack.Suspend(); pack.Resume()
     SUCCESSFULL - пакет задач выполнен успешно
     HISTORIED   - пакет задач удален из очереди выполнения
@@ -235,15 +235,16 @@ class JobPacket(object):
     DEFAULT_TRIES_COUNT = 5
 
     def __init__(self, connector, name, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness, resetable,
-                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_DUPLICATE_NAMES_POLICY):
+                 kill_all_jobs_on_error=True, packet_name_policy=DEFAULT_DUPLICATE_NAMES_POLICY, run_as=''):
         self.conn = connector
         self.proxy = connector.proxy
         if check_tag_uniqueness and self.proxy.check_tag(set_tag):
             raise RuntimeError("result tag %s already set for packet %s" % (set_tag, name))
-        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, packet_name_policy, resetable)
+        self.id = self.proxy.create_packet(name, priority, notify_emails, wait_tags, set_tag, kill_all_jobs_on_error, packet_name_policy, resetable, run_as)
 
     def AddJob(self, shell, parents=None, pipe_parents=None, set_tag=None, tries=DEFAULT_TRIES_COUNT, files=None, \
-               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=NOTIFICATION_TIMEOUT, max_working_time=KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
+               max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=NOTIFICATION_TIMEOUT, max_working_time=KILL_JOB_DEFAULT_TIMEOUT,
+               output_to_status=False, run_as=''):
         """добавляет задачу в пакет
         shell - коммандная строка, которую следует выполнить
         tries - количество попыток выполнения команды (в случае неуспеха команда перазапускается ограниченное число раз) (по умолчанию: 5)
@@ -252,8 +253,9 @@ class JobPacket(object):
         set_tag - тэг, который будет установлен в случае успешного выполнения задания
         pipe_fail - аналог "set -o pipefail" для bash (работает только в случае, если bash установлен на сервере с REM'ом)
         description - опциональный параметр, задающий человекочитамое имя джоба
+        run_as - имя пользователя, от которого запускать задачу
         files - список файлов, которые нужно положить в рабочую директорию задания (рабочая директория у всех заданий внутри одного пакета одна и та же)
-               можно вместо списка указать dictionary, в этом случае значение словаря будет указывать на путь до файла, а ключ на имя, с которым этот файл следует положить 
+               можно вместо списка указать dictionary, в этом случае значение словаря будет указывать на путь до файла, а ключ на имя, с которым этот файл следует положить
                в рабочий каталог задания (реально в рабочем каталоге создаются symlink'и на файлы, располагающиеся в одной общей директории, куда копируются все бинарники)"""
         parents = [job.id for job in parents or []]
         pipe_parents = [job.id for job in pipe_parents or []]
@@ -261,11 +263,11 @@ class JobPacket(object):
             self.AddFiles(files)
         return JobInfo(id=self.proxy.pck_add_job(self.id, shell, parents,
                        pipe_parents, set_tag, tries, max_err_len, retry_delay,
-                       pipe_fail, description, notify_timeout, max_working_time, output_to_status))
+                       pipe_fail, description, notify_timeout, max_working_time, output_to_status, run_as))
 
     def AddJobsBulk(self, *jobs):
         """быстрое(batch) добавление задач в пакет
-        принимает неограниченное количество параметров, 
+        принимает неограниченное количество параметров,
         каждый параметр - словарь, ключи и значения которого аналогичны параметрам метода AddJob"""
         multicall = xmlrpc_client.MultiCall(self.proxy)
         for job in jobs:
@@ -282,7 +284,8 @@ class JobPacket(object):
                                   job.get("description", ""),
                                   job.get("notify_timeout", NOTIFICATION_TIMEOUT),
                                   job.get("max_working_time", KILL_JOB_DEFAULT_TIMEOUT),
-                                  job.get("output_to_status", False))
+                                  job.get("output_to_status", False),
+                                  job.get("run_as", ""))
         return multicall()
 
     def AddFiles(self, files, retries=1):
@@ -636,7 +639,7 @@ class Connector(object):
         return Queue(self, qname)
 
     def Packet(self, pckname, priority=MAX_PRIORITY, notify_emails=[], wait_tags=(), set_tag=None,
-               check_tag_uniqueness=False, resetable=True, kill_all_jobs_on_error=True):
+               check_tag_uniqueness=False, resetable=True, kill_all_jobs_on_error=True, run_as=''):
         """создает новый пакет с именем pckname
             priority - приоритет выполнения пакета
             notify_emails - список почтовых адресов, для уведомления об ошибках
@@ -644,12 +647,14 @@ class Connector(object):
             set_tag - тэг, устанавливаемый по завершении работы пакеты
             kill_all_jobs_on_error - при неудачном завершении задания остальные задания прекращают работу
             resetable - флаг, контролирующий возможность трансляции через пакет цепочки Reset'ов (по умолчанию - True)
-        возвращает объект класса JobPacket"""
+        возвращает объект класса JobPacket
+            run_as - пользователь, из под которого будут запускаться задачи пакета по умолчанию
+        """
         try:
             if isinstance(wait_tags, str):
                 raise AttributeError("wrong wait_tags attribute type")
             return JobPacket(self, pckname, priority, notify_emails, wait_tags, set_tag, check_tag_uniqueness, resetable,
-                             kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy)
+                             kill_all_jobs_on_error=kill_all_jobs_on_error, packet_name_policy=self.packet_name_policy, run_as=run_as)
         except xmlrpc_client.Fault as e:
             if 'DuplicatePackageNameException' in e.faultString:
                 self.logger.error(DuplicatePackageNameException(e.faultString).message)

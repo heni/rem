@@ -95,12 +95,14 @@ class Job(Unpickable(err=nullobject,
                      _notified=bool,
                      output_to_status=bool,
                      alive=bool,
-                     running_pids=set),
+                     running_pids=set,
+                     run_as=str),
           CallbackHolder):
     ERR_PENALTY_FACTOR = 6
 
     def __init__(self, shell, parents, pipe_parents, packetRef, maxTryCount, limitter, max_err_len=None,
-                 retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
+                 retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT,
+                 output_to_status=False, run_as=''):
         super(Job, self).__init__()
         self.maxTryCount = maxTryCount
         self.limitter = limitter
@@ -119,6 +121,7 @@ class Job(Unpickable(err=nullobject,
         self.packetRef = packetRef
         self.AddCallbackListener(self.packetRef)
         self.output_to_status = output_to_status
+        self.run_as = run_as
 
     @staticmethod
     def __read_stream(fh, buffer):
@@ -204,9 +207,12 @@ class Job(Unpickable(err=nullobject,
                 self.packetRef.changeState(packet.PacketState.ERROR)
 
     def _make_run_args(self):
-        return [osspec.get_shell_location()] \
+        command = [osspec.get_shell_location()] \
             + (["-o", "pipefail"] if self.pipe_fail else []) \
             + ["-c", self.shell]
+        if self.run_as:
+            return osspec.sudo_command(command, user=self.run_as)
+        return command
 
     def Run(self, worker_trace_pids=None):
         self.alive = True

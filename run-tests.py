@@ -8,7 +8,7 @@ import sys
 import tempfile
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), "client"))
+sys.path.insert(0, os.path.join(os.path.dirname(sys.argv[0]), "client", "src"))
 import six
 from six.moves.configparser import ConfigParser
 import remclient

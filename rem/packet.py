@@ -15,7 +15,7 @@ import fork_locking
 class PacketState(object):
     CREATED = "CREATED"                 #created only packet
     WORKABLE = "WORKABLE"               #working packet without pending jobs
-    PENDING = "PENDING"                 #working packet with pending jobs 
+    PENDING = "PENDING"                 #working packet with pending jobs
     SUSPENDED = "SUSPENDED"            #suspended packet
     ERROR = "ERROR"                     #unresolved error exists
     SUCCESSFULL = "SUCCESSFULL"         #successfully done packet
@@ -331,13 +331,14 @@ class JobPacket(Unpickable(lock=PickableRLock,
                            flags=int,
                            kill_all_jobs_on_error=(bool, True),
                            _working_empty=lambda : None,
-                           isResetable=(bool, True)),
+                           isResetable=(bool, True),
+                           run_as=str),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
     INCORRECT = -1
 
-    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True, isResetable=True):
+    def __init__(self, name, priority, context, notify_emails, wait_tags=(), set_tag=None, kill_all_jobs_on_error=True, isResetable=True, run_as=""):
         super(JobPacket, self).__init__()
         self.name = name
         self.state = PacketState.NONINITIALIZED
@@ -350,6 +351,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
         self.isResetable = isResetable
         self.done_indicator = set_tag
         self.SetWaitingTags(wait_tags)
+        self.run_as = run_as
 
     def __getstate__(self):
         sdict = CallbackHolder.__getstate__(self)
@@ -473,7 +475,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
             self.ProcessTagEvent(ref)
 
     def Add(self, shell, parents, pipe_parents, set_tag, tries,
-            max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time, output_to_status):
+            max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time, output_to_status, run_as):
         if self.state not in (PacketState.CREATED, PacketState.SUSPENDED):
             raise RuntimeError("incorrect state for \"Add\" operation: %s" % self.state)
         with self.lock:
@@ -481,7 +483,8 @@ class JobPacket(Unpickable(lock=PickableRLock,
             pipe_parents = list(p.id for p in pipe_parents)
             job = Job(shell, parents, pipe_parents, self, maxTryCount=tries,
                       limitter=None, max_err_len=max_err_len, retry_delay=retry_delay,
-                      pipe_fail=pipe_fail, description=description, notify_timeout=notify_timeout, max_working_time=max_working_time, output_to_status=output_to_status)
+                      pipe_fail=pipe_fail, description=description, notify_timeout=notify_timeout, max_working_time=max_working_time,
+                      output_to_status=output_to_status, run_as=(run_as or self.run_as))
             self.jobs[job.id] = job
             if set_tag:
                 self.job_done_indicator[job.id] = set_tag

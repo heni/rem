@@ -122,6 +122,16 @@ def get_shell_location(_cache=[]):
     return _cache[0]
 
 
+def get_sudo_location(_cache=[]):
+    if not _cache:
+        _cache += [path for path in ("/usr/bin/sudo", "/usr/local/bin/sudo", "/sbin/sudo") if os.access(path, os.X_OK)]
+    return _cache[0]
+
+def sudo_command(command, user):
+    assert isinstance(command, list), "malformatted command: %s" % (command,)
+    return [get_sudo_location(), "-u", user] + command
+
+
 @should_execute_maker(20, 5, Exception)
 def send_email(emails, subject, message):
     sender = subprocess.Popen(["sendmail"] + map(str, emails), stdin=subprocess.PIPE)

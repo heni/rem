@@ -88,7 +88,7 @@ def readonly_method(func):
 
 
 @traced_rpc_method("info")
-def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY, resetable=True):
+def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, kill_all_jobs_on_error=True, packet_name_policy=constants.DEFAULT_DUPLICATE_NAMES_POLICY, resetable=True, run_as=''):
     if packet_name_policy & constants.DENY_DUPLICATE_NAMES_POLICY and _scheduler.packetNamesTracker.Exist(packet_name):
         ex = DuplicatePackageNameException(packet_name, _context.network_name)
         raise xmlrpclib.Fault(1, ex.message)
@@ -99,7 +99,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
     wait_tags = [_scheduler.tagRef.AcquireTag(tagname) for tagname in wait_tagnames]
     pck = JobPacket(packet_name, priority, _context, notify_emails,
                     wait_tags=wait_tags, set_tag=_scheduler.tagRef.AcquireTag(set_tag),
-                    kill_all_jobs_on_error=kill_all_jobs_on_error, isResetable=resetable)
+                    kill_all_jobs_on_error=kill_all_jobs_on_error, isResetable=resetable, run_as=run_as)
     _scheduler.RegisterNewPacket(pck, wait_tags)
     logging.info('packet %s registered as %s', packet_name, pck.id)
     return pck.id
@@ -107,7 +107,7 @@ def create_packet(packet_name, priority, notify_emails, wait_tagnames, set_tag, 
 
 @traced_rpc_method()
 def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
-                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False):
+                max_err_len=None, retry_delay=None, pipe_fail=False, description="", notify_timeout=constants.NOTIFICATION_TIMEOUT, max_working_time=constants.KILL_JOB_DEFAULT_TIMEOUT, output_to_status=False, run_as=''):
     pck = _scheduler.tempStorage.GetPacket(pck_id)
     if pck is not None:
         if isinstance(shell, unicode):
@@ -115,7 +115,7 @@ def pck_add_job(pck_id, shell, parents, pipe_parents, set_tag, tries,
         parents = [pck.jobs[int(jid)] for jid in parents]
         pipe_parents = [pck.jobs[int(jid)] for jid in pipe_parents]
         job = pck.Add(shell, parents, pipe_parents, _scheduler.tagRef.AcquireTag(set_tag), tries, \
-                      max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time, output_to_status)
+                      max_err_len, retry_delay, pipe_fail, description, notify_timeout, max_working_time, output_to_status, run_as)
         return str(job.id)
     raise AttributeError("nonexisted packet id: %s" % pck_id)
 
