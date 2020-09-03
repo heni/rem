@@ -1,6 +1,7 @@
 *.py[cod]
 rem.cfg
 network_topology.cfg
+tests.cfg
 *.dump
 *.db
 *.log*
@@ -13,3 +14,6 @@ setup_env.sh
 packets
 bin
 run-tests-local.py
+
+local-01
+local-02

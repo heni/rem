@@ -227,6 +227,17 @@ class JobPacketImpl(object):
                     pass
         osspec.set_common_readable(self.directory)
         osspec.set_common_executable(self.directory)
+        run_as_user = self._runAs()
+        logging.warning("packet %s run_as=%s", self.id, run_as_user)
+        if run_as_user:
+            if context.use_acl:
+                osspec.add_acl_permission(self.directory, run_as_user, "rwx")
+            else:
+                logging.warning(
+                    "directory %s would be accessible to write by anyone, please enable use_acl option to avoid it",
+                    self.directory
+                )
+                osspec.set_common_writable(self.directory)
         self.CreateLinks(context)
         self.streams = dict()
 
@@ -332,7 +343,8 @@ class JobPacket(Unpickable(lock=PickableRLock,
                            kill_all_jobs_on_error=(bool, True),
                            _working_empty=lambda : None,
                            isResetable=(bool, True),
-                           run_as=str),
+                           run_as=str,
+                           run_as_allowed=bool),
                 CallbackHolder,
                 ICallbackAcceptor,
                 JobPacketImpl):
@@ -342,6 +354,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
         super(JobPacket, self).__init__()
         self.name = name
         self.state = PacketState.NONINITIALIZED
+        self.run_as = run_as
         self.Init(context)
         self.priority = priority
         self.notify_emails = list(notify_emails)
@@ -351,7 +364,6 @@ class JobPacket(Unpickable(lock=PickableRLock,
         self.isResetable = isResetable
         self.done_indicator = set_tag
         self.SetWaitingTags(wait_tags)
-        self.run_as = run_as
 
     def __getstate__(self):
         sdict = CallbackHolder.__getstate__(self)
@@ -368,9 +380,15 @@ class JobPacket(Unpickable(lock=PickableRLock,
 
         return sdict
 
+    def _runAs(self, job_run_as=None):
+        if self.run_as_allowed:
+            return self.run_as  or job_run_as or ''
+        return ''
+
     def Init(self, context):
         logging.info("packet init: %r %s", self, self.state)
         self.result = None
+        self.run_as_allowed = context.allow_runas
         if not getattr(self, "directory", None):
             self.CreatePlace(context)
         self.changeState(PacketState.CREATED)
@@ -484,7 +502,7 @@ class JobPacket(Unpickable(lock=PickableRLock,
             job = Job(shell, parents, pipe_parents, self, maxTryCount=tries,
                       limitter=None, max_err_len=max_err_len, retry_delay=retry_delay,
                       pipe_fail=pipe_fail, description=description, notify_timeout=notify_timeout, max_working_time=max_working_time,
-                      output_to_status=output_to_status, run_as=(run_as or self.run_as))
+                      output_to_status=output_to_status, run_as=self._runAs(run_as))
             self.jobs[job.id] = job
             if set_tag:
                 self.job_done_indicator[job.id] = set_tag

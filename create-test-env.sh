@@ -21,11 +21,22 @@ create_rem_directory() {
     sed -ibak "s|allow_backup_rpc_method\s*=\s*no|allow_backup_rpc_method = yes|g" $DIR/rem.cfg
 }
 
+cd $(dirname $0)
+
 cat <<CONFIG > network_topology.cfg
 [servers]
 local-01 = http://localhost:18104, http://localhost:18105
 local-02 = http://localhost:28104, http://localhost:28105
 CONFIG
+
+cat <<TEST_CONFIG > tests.cfg
+[tests]
+servers =
+    local-01, local://$(pwd)/local-01/, localhost
+    local-02, local://$(pwd)/local-02/, localhost
+notify_email = $(whoami)@localhost
+alt_user = remtest
+TEST_CONFIG
 
 create_rem_directory "local-01" "1"
 create_rem_directory "local-02" "2"

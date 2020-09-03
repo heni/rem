@@ -61,8 +61,8 @@ class JobStartErrorResult(CommandLineResult):
 
 
 class TriesExceededResult(IResult):
-    def __init__(self, maxcount):
-        IResult.__init__(self, "The number of attempts exceeded", maxcount, None)
+    def __init__(self, maxcount, last_error=None):
+        IResult.__init__(self, "The number of attempts exceeded", maxcount, "LastError: {{\n-----\n%s\n-----\n}}" % last_error if last_error else None)
 
     def CanRetry(self):
         return False
@@ -196,7 +196,7 @@ class Job(Unpickable(err=nullobject,
                     and self.packetRef.state in (packet.PacketState.WORKABLE, packet.PacketState.PENDING)):
                 if result is not None:
                     logging.info("Job`s %s result: TriesExceededResult", self.id)
-                    self.results.append(TriesExceededResult(self.tries))
+                    self.results.append(TriesExceededResult(self.tries, result))
                 if self.packetRef.kill_all_jobs_on_error:
                     self.packetRef.Suspend(kill_jobs=True)
                     self.packetRef.changeState(packet.PacketState.ERROR)

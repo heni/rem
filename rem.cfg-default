@@ -74,3 +74,7 @@ use_memory_profiler = no
 max_remotetags_resend_delay = 300 ; 5 минут
 #разрешать ли форсированный (через XMLRPC) бэкап
 allow_backup_rpc_method = no
+#разрешать run_as опцию для запуска пакетов из-под других пользователей (требует настройки sudo)
+allow_runas = yes
+#использовать ACL для контроля доступов к директориям пакетов, использующих run_as (требует настройки acl в файловой системе)
+use_acl = yes

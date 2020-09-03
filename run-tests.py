@@ -30,6 +30,7 @@ class ClientInfo(object):
         self.url = "http://%s:%d" % (hostname, cp.getint("server", "port"))
         self.admin_url = "http://%s:%d" % (hostname, cp.getint("server", "system_port"))
         self.readonly_url = "http://%s:%d" % (hostname, cp.getint("server", "readonly_port"))
+        self.rem_configuration = cp
         self.connector = remclient.Connector(self.url, verbose=True, packet_name_policy=remclient.IGNORE_DUPLICATE_NAMES_POLICY)
         self.admin_connector = remclient.AdminConnector(self.admin_url, verbose=True)
         self.readonly_connector = remclient.Connector(self.readonly_url, verbose=True, packet_name_policy=remclient.IGNORE_DUPLICATE_NAMES_POLICY)
@@ -53,12 +54,22 @@ class ClientInfo(object):
 
 class Configuration(object):
     @classmethod
-    def GetLocalConfig(cls):
+    def GetConfigFromFile(cls, filename):
+        cp = ConfigParser()
+        assert filename in cp.read([filename])
         config = cls()
-        config.server1 = ClientInfo("local-01", "local://./local-01/", "localhost")
-        config.server2 = ClientInfo("local-02", "local://./local-02/", "localhost")
-        config.notify_email = "eugene.krokhalev@gmail.com"
+        servers = cls.parse_multiline_options(cp.get("tests", "servers"))
+        assert len(servers) == 2 and len(servers[0]) == 3 and len(servers[1]) == 3, "incorrect servers configuration"
+        config.server1 = ClientInfo(*servers[0])
+        config.server2 = ClientInfo(*servers[1])
+        config.notify_email = cp.get("tests", "notify_email")
+        config.alt_user = cp.get("tests", "alt_user")
         return config
+
+    @staticmethod
+    def parse_multiline_options(optvalue):
+        tuples = list(filter(None, (optvalue or "").split("\n")))
+        return [[v.strip() for v in tpl.split(",")] for tpl in tuples]
 
     @staticmethod
     def __sync_dir(srcdir, dstdir, paths):
@@ -91,6 +102,6 @@ class Configuration(object):
 
 
 if __name__ == "__main__":
-    config = Configuration.GetLocalConfig()
+    config = Configuration.GetConfigFromFile("tests.cfg")
     testdir.setUp(config, "userdata")
     unittest.TestProgram(module=testdir)

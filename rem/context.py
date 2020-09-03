@@ -92,6 +92,8 @@ class Context(object):
         self.useMemProfiler = config.getboolean("server", "use_memory_profiler")
         self.max_remotetags_resend_delay = config.safe_getint("server", "max_remotetags_resend_delay", 300)
         self.allow_backup_rpc_method = config.safe_getboolean("server", "allow_backup_rpc_method", False)
+        self.allow_runas = config.safe_getboolean("server", "allow_runas", True)
+        self.use_acl = config.safe_getboolean("server", "use_acl", False)
         self.initLogger(config, self.execMode != "start")
 
     def initLogger(self, config, isTestMode):

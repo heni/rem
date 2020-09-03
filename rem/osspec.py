@@ -116,6 +116,11 @@ def set_common_readable(path):
     os.chmod(path, mode)
 
 
+def set_common_writable(path):
+    mode = os.stat(path)[0] | stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+    os.chmod(path, mode)
+
+
 def get_shell_location(_cache=[]):
     if not _cache:
         _cache += [path for path in ("/bin/bash", "/usr/local/bin/bash", "/bin/sh") if os.access(path, os.X_OK)]
@@ -161,3 +166,11 @@ def set_process_title(proc_title):
 def repr_term_status(status):
     return 'exit(%d)' % os.WEXITSTATUS(status) if os.WIFEXITED(status) \
       else 'kill(%d)' % os.WTERMSIG(status)
+
+def add_acl_permission(path, username, permissions):
+    hndl = subprocess.Popen(
+        ["setfacl", "-m", "u:%s:%s" % (username, permissions), path],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=get_null_input()
+    )
+    _out, _err = hndl.communicate()
+    assert hndl.poll() == 0, "can't set ACL on %s: %s" % (path, (_out, _err))
