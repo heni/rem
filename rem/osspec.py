@@ -168,9 +168,12 @@ def repr_term_status(status):
       else 'kill(%d)' % os.WTERMSIG(status)
 
 def add_acl_permission(path, username, permissions):
-    hndl = subprocess.Popen(
-        ["setfacl", "-m", "u:%s:%s" % (username, permissions), path],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=get_null_input()
-    )
-    _out, _err = hndl.communicate()
+    try:
+        hndl = subprocess.Popen(
+            ["setfacl", "-m", "u:%s:%s" % (username, permissions), path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=get_null_input()
+        )
+        _out, _err = hndl.communicate()
+    except Exception, e:
+        raise RuntimeError("can't add ACL permissions, reason: %s" % e)
     assert hndl.poll() == 0, "can't set ACL on %s: %s" % (path, (_out, _err))

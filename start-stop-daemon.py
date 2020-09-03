@@ -82,7 +82,49 @@ class LogPrinter(object):
         sys.stdout.write("\033[80D\033[67C\033[31m[Interrupted]\033[0m\n")
 
 
+def check_cmdline(pid, names_to_check):
+    platform = os.uname()[0]
+    if platform == "Darwin":
+        try:
+            import psutil
+        except:
+            logging.error("install psutil package first")
+            raise
+        try:
+            commandline = psutil.Process(pid).cmdline()
+        except psutil.NoSuchProcess:
+            return False
+        return any(commandline[0] == checkname for checkname in names_to_check)
+    if platform == "Linux" or os.path.isdir("/proc"):
+        cmdfile = "/proc/%s/cmdline" % pid
+        if not os.path.isfile(cmdfile):
+            return False
+        with open(cmdfile) as psReader:
+            psLine = psReader.read()
+        return any(psLine.startswith(checkname) for checkname in names_to_check)
+    raise NotImplementedError("unsupported platform: %s" % platform)
+
+
+def check_pid(pid):
+    platform = os.uname()[0]
+    if platform == "Darwin":
+        try:
+            import psutil
+        except:
+            logging.error("install psutil package first")
+            raise
+        try:
+            hndl = psutil.Process(pid)
+        except psutil.NoSuchProcess:
+            return False
+        return True
+    if platform == "Linux" or os.path.isdir("/proc"):
+        return os.path.isdir("/proc/%s" % pid)
+
+
 class Service(object):
+    WAITING_FOR_START = 0.2
+
     def __init__(self, runargs, pidfile, logfile, name=None, checkname=None, customname=None):
         self.runArgs = runargs
         self.pidFile = pidfile
@@ -96,7 +138,7 @@ class Service(object):
         """Checks if daemon is started
                 args - process start arguments
                 pidfile - file with stored process pid
-           
+
            If daemon is running returns process ID
            If daemon is not started returns False
            If pidFile is not exist returns None"""
@@ -106,12 +148,7 @@ class Service(object):
         except (ValueError, IOError), e:
             return None
         try:
-            cmdfile = "/proc/%s/cmdline" % pid
-            if not os.path.isfile(cmdfile):
-                return False
-            with open(cmdfile) as psReader:
-                psLine = psReader.read()
-            if any(psLine.startswith(checkname) for checkname in self.checkExecNames):
+            if check_cmdline(pid, self.checkExecNames):
                 return pid
             return False
         except:
@@ -142,6 +179,7 @@ class Service(object):
                 with open(self.pidFile, "w") as writer:
                     print >> writer, pid
                 while time.time() - stTime <= timeout:
+                    time.sleep(self.WAITING_FOR_START)
                     wres = waitpid_ex(pid, os.WNOHANG)
                     if wres.pid == pid:
                         if wres.error:
@@ -182,12 +220,12 @@ class Service(object):
                 pgid = os.getpgid(pid)
                 os.killpg(pgid, signum)
                 time.sleep(0.1)
-                while os.path.isdir("/proc/%s" % pid) and time.time() - stTime < timeout:
+                while check_pid(pid) and time.time() - stTime < timeout:
                     time.sleep(0.01)
                     logger.process()
-                if os.path.isdir("/proc/%s" % pid):
+                if check_pid(pid):
                     os.killpg(pgid, signal.SIGKILL)
-                result = not os.path.isdir("/proc/%s" % pid)
+                result = not check_pid(pid)
                 if result:
                     logger.ok()
                 else:
@@ -205,14 +243,14 @@ class Service(object):
 class REMService(Service):
     def __init__(self):
         self.Configure()
-        interpreter = "python"
+        interpreter = sys.executable
         runArgs = [interpreter, "rem-server.py", "start"]
         if self.setupScript: runArgs = ["/bin/sh", "-c", " ".join([self.setupScript, "&&", "exec"] + runArgs)]
         if not os.path.isdir("var"): os.makedirs("var")
         super(REMService, self).__init__(
-            runargs=runArgs, pidfile="var/rem.pid", logfile="var/rem.errlog", 
+            runargs=runArgs, pidfile="var/rem.pid", logfile="var/rem.errlog",
             name="remd%s" % (("(\"" + self.serverName + "\")") if self.serverName else ""),
-            checkname="python",
+            checkname=sys.executable,
             customname="[remd]"
         )
 

@@ -6,6 +6,7 @@ import re
 import select
 import signal
 import socket
+import sys
 import time
 import threading
 from SimpleXMLRPCServer import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
