@@ -108,6 +108,7 @@ except ImportError:
 
 __all__ = [
     "AdminConnector", "Connector", "JobPacketInfo",
+    "JobPacket", "JobInfo", "Queue"
     "DEFAULT_DUPLICATE_NAMES_POLICY", "IGNORE_DUPLICATE_NAMES_POLICY", "DENY_DUPLICATE_NAMES_POLICY", "WARN_DUPLICATE_NAMES_POLICY"
 ]
 MAX_PRIORITY = 2**31 - 1
