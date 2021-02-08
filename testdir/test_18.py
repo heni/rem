@@ -2,6 +2,7 @@ import unittest
 import logging
 import remclient
 import time
+import os
 from testdir import Config, TestingQueue, WaitForExecution
 
 
@@ -71,3 +72,17 @@ class T18(unittest.TestCase):
         self.assertTrue(self.alt_user in cat_job_message, "unexpected job output: %s" % cat_job_message)
         pckInfo.Delete()
 
+    def testRunAsWithSecureData(self):
+        timestamp = int(time.time())
+        pckname = "testRunAsWithSecureData-%d" % timestamp
+        pck = self.connector.Packet(pckname, run_as=self.alt_user)
+        createstore_job = pck.AddJob("mktemp -d ./.store-XXXX > store_name")
+        securegen_job = pck.AddJob("pwgen 12 100 > $(cat store_name)/passwords.txt", tries=1, parents=[createstore_job])
+        secureset_job = pck.AddJob("chmod 600 $(cat store_name)/passwords.txt", parents=[securegen_job])
+        self.connector.Queue(TestingQueue.Get()).AddPacket(pck)
+        logging.info("packet %s(%s) added to queue %s, waiting until doing", pckname, pck.id, TestingQueue.Get())
+        pckInfo = self.connector.PacketInfo(pck.id)
+        self.assertEqual(WaitForExecution(pckInfo), "SUCCESSFULL")
+        packet_dir = os.path.join(Config.Get().server1.packetsDir, pck.id)
+        self.assertFalse(os.path.exists(packet_dir))
+        pckInfo.Delete()

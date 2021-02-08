@@ -203,7 +203,11 @@ class JobPacketImpl(object):
         self.ReleaseLinks()
         if self.directory and os.path.isdir(self.directory):
             try:
-                shutil.rmtree(self.directory, onerror=None)
+                run_as_user = self._runAs()
+                if run_as_user:
+                    osspec.rmtree_with_privelleged_user(self.directory, run_as_user)
+                else:
+                    shutil.rmtree(self.directory, onerror=None)
             except Exception, e:
                 logging.exception("Packet %s release place error", self.id)
         self.directory = None

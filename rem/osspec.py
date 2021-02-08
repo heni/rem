@@ -4,6 +4,7 @@ from __future__ import with_statement
 import logging
 import os
 import signal
+import shutil
 import stat
 import subprocess
 import sys
@@ -177,3 +178,22 @@ def add_acl_permission(path, username, permissions):
     except Exception, e:
         raise RuntimeError("can't add ACL permissions, reason: %s" % e)
     assert hndl.poll() == 0, "can't set ACL on %s: %s" % (path, (_out, _err))
+
+def rmtree_with_privelleged_user(dirname, user):
+    try:
+        dir_content = [os.path.join(dirname, f) for f in os.listdir(dirname)]
+        content_rm_command = ["rm", "-rf"] + dir_content
+        hndl = subprocess.Popen(
+            sudo_command(content_rm_command, user),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=get_null_input()
+        )
+        _out, _err = hndl.communicate()
+        if hndl.poll() != 0:
+            logging.error("can't remove directory %s content: rm non-zero exitcode: %d\nstdout: %s\nstderr: %s" % (
+                dirname, hndl.poll(), _out, _err
+            ))
+        logging.debug("running as user %s command: %s", user, content_rm_command)
+        logging.debug("exit_code: %d", hndl.poll())
+    except Exception, e:
+        logging.exception("can't remove directory %s content", dirname)
+    shutil.rmtree(dirname)

@@ -27,6 +27,7 @@ class ClientInfo(object):
             if os.path.isdir(tmp_dir):
                 shutil.rmtree(tmp_dir)
         self.binDir = cp.get('store', 'binary_dir')
+        self.packetsDir = cp.get('store', 'pck_dir')
         self.url = "http://%s:%d" % (hostname, cp.getint("server", "port"))
         self.admin_url = "http://%s:%d" % (hostname, cp.getint("server", "system_port"))
         self.readonly_url = "http://%s:%d" % (hostname, cp.getint("server", "readonly_port"))
